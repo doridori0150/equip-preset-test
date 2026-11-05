@@ -691,7 +691,7 @@ function bannerState() {
   if (isDirty()) return { status: "", text: "저장 전 변경 사항이 있습니다" };
   return { status: "", text: isArena() ?"모든 영웅의 장비가 저장되어 있습니다" : "모든 영웅의 장비가 저장값과 같습니다" };
 }
-/* 현재 착용과 프리셋을 슬롯별로 위아래에 놓고, 다른 칸에 색과 표시를 준다. */
+/* 평소에는 슬롯마다 아이콘 1개를 크게 보여 주고, 현재와 프리셋이 다른 슬롯만 둘을 나란히 보여 준다. */
 function cmpSlot(s, v, it, emptyText) {
   if (it && it.alive) return `<div class="slot g${it.grade}"><img src="assets/item/${it.icon}.png" alt="">${s < 7 ? `<span class="plus">+${it.lb}</span>` : ""}</div>`;
   if (it) return '<div class="slot empty"><span>분해됨</span></div>';
@@ -714,16 +714,18 @@ function compareState(h, s) {
 function compareHTML(h) {
   const a = actualOf(h);
   const d = V.draft[h];
-  const cols = SLOT_IDS.map((s) => {
+  const cells = SLOT_IDS.map((s) => {
     const v = d ? d[s] || 0 : 0;
+    const cur = a[s] || 0;
     const st = compareState(h, s);
-    return `<div class="cmpCol ${st.cls} ${V.slot === s ? "picked" : ""}" data-act="pickSlot" data-s="${s}" title="${SLOT_NAME[s]} 교체">
-      <div class="cmpName">${SLOT_NAME[s]}</div>
-      ${cmpSlot(s, a[s], info(s, a[s]), "없음")}
-      ${cmpSlot(s, v, info(s, v), d ? "없음" : "미저장")}
-      <div class="cmpTag">${esc(st.tag)}</div></div>`;
+    const pair = st.count && (v || cur);
+    const body = pair
+      ? `<div class="pPair"><div><small>현재</small>${cmpSlot(s, cur, info(s, cur), "없음")}</div><div><small>프리셋</small>${cmpSlot(s, v, info(s, v), "없음")}</div></div>`
+      : `<div class="pOne">${cmpSlot(s, cur, info(s, cur), "비어 있음")}</div>`;
+    return `<div class="pSlot ${st.cls} ${V.slot === s ? "picked" : ""}" data-act="pickSlot" data-s="${s}" title="${SLOT_NAME[s]} 교체">
+      <div class="pName">${SLOT_NAME[s]}</div>${body}<div class="pTag">${esc(st.tag)}</div></div>`;
   }).join("");
-  return `<div class="cmpGrid"><div class="cmpLabels"><div class="cmpName"></div><b>현재</b><b>프리셋</b><div class="cmpTag"></div></div>${cols}</div>`;
+  return `<div class="pGrid">${cells}</div>`;
 }
 function compareInfo(h) {
   if (!V.draft[h]) return "프리셋에 저장된 장비가 없습니다. 슬롯을 누르면 실제 장비를 교체합니다.";
