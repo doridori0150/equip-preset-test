@@ -105,6 +105,7 @@ function dirtyDeck(idx) {
   return S.decks[idx].cells.filter(Boolean).some((h) => !sameSlots(dr[h], sv[h]));
 }
 const anyDirty = () => groupDecks().some((d) => dirtyDeck(d.index));
+const dirtyTabs = () => groupDecks().filter((d) => dirtyDeck(d.index));
 const canSave = () => Object.keys(V.draft).length > 0 && (isDirty() || hasOutOfDeck());
 /* 저장 후 팀 프리셋의 편성이 달라졌는지. 편성은 팀 프리셋이 맡고, 저장 때의 명단은 비교에만 쓴다. */
 function rosterChange() {
@@ -403,6 +404,23 @@ const ACT = {
     if (anyDirty()) { V.modal = { type: "leave" }; return; }
     V.drafts = {};
     V.screen = "team";
+  },
+  // 탭이 있는 콘텐츠는 저장 안 한 탭을 모두 저장하고 나간다. 보던 탭은 그대로 둔다.
+  saveLeave() {
+    const cur = S.deckIdx;
+    const targets = dirtyTabs();
+    V.drafts[cur] = V.draft;
+    targets.forEach((d) => {
+      S.deckIdx = d.index;
+      V.draft = V.drafts[d.index];
+      doSave();
+    });
+    S.deckIdx = cur;
+    V.modal = null;
+    V.drafts = {};
+    V.draft = {};
+    V.screen = "team";
+    log(`저장 후 나가기: ${targets.map((d) => d.tab || d.label).join(", ")}`);
   },
   leaveYes() { V.modal = null; V.drafts = {}; V.screen = "team"; log("저장하지 않고 나가기: 화면 값 버림"); },
   selectHero(el) { V.selected = Number(el.dataset.h); V.inspect = V.selected; V.slot = 0; },
@@ -835,7 +853,13 @@ function modalHTML() {
     const outs = outOfDeckHeroes();
     body = `<p>저장된 프리셋을 현재 화면 내용으로 덮어쓰시겠습니까?</p>${outs.length ? `<div class="sub">편성에서 제외된 영웅 ${outs.length}명의 저장값이 삭제됩니다.</div><ul>${outs.map((t) => `<li>${esc(heroName(t))}</li>`).join("")}</ul>` : ""}<div class="row"><button class="btn line" data-act="closeModal">취소</button><button class="btn gold" data-act="overwriteYes">덮어쓰기</button></div>`;
   } else if (m.type === "leave") {
-    body = `<p>변경 사항이 저장되지 않았습니다.\n정말로 나가시겠습니까?</p><div class="row"><button class="btn line" data-act="closeModal">취소</button><button class="btn gold" data-act="leaveYes">나가기</button></div>`;
+    const tabs = dirtyTabs();
+    const outs = tabs.flatMap((d) => Object.keys(S.presets[d.index] || {}).map(Number).filter((h) => !S.decks[d.index].cells.includes(h)));
+    const names = [...new Set(outs)].map((t) => esc(heroName(t))).join(", ");
+    body = `<p>변경 사항이 저장되지 않았습니다.\n정말로 나가시겠습니까?</p>
+      ${tabs.length > 1 ? `<div class="sub">저장 안 한 탭: ${tabs.map((d) => esc(d.tab)).join(", ")}</div>` : ""}
+      ${names ? `<div class="sub">저장하면 편성에서 제외된 영웅의 저장값이 삭제됩니다: ${names}</div>` : ""}
+      <div class="row"><button class="btn line" data-act="closeModal">취소</button><button class="btn line" data-act="leaveYes">나가기</button><button class="btn gold" data-act="saveLeave">저장 후 나가기</button></div>`;
   } else if (m.type === "alert") {
     body = `<p>${esc(m.text)}</p><div class="row"><button class="btn gold" data-act="closeModal">확인</button></div>`;
   } else if (m.type === "copy") {
