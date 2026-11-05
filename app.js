@@ -7,12 +7,6 @@ const SLOT_IDS = [1, 2, 3, 4, 5, 6, 7];
 const SLOT_NAME = D.slots;
 const MSG_PARTIAL = "프리셋의 일부 장비가 존재하지 않아 일부 장비가 교체되지 않았습니다.";
 const MSG_NO_PRESET = "현재 저장된 프리셋이 없습니다.\n편성된 팀 기준으로 불러오시겠습니까?";
-// A안: 편성을 바꿔도 저장값은 그대로. B안: 편성을 바꾸면 저장값도 바로 따라간다.
-const VARIANT = new URLSearchParams(location.search).get("v") === "b" ? "B" : "A";
-const VARIANT_RULE = {
-  A: "편성을 바꿔도 프리셋 저장값은 그대로입니다. 새 영웅은 미설정이고, 빠진 영웅의 저장값은 덮어쓰기 전까지 남습니다.",
-  B: "편성을 바꾸면 프리셋도 바로 바뀝니다. 새 영웅은 현재 장비로 자동 저장되고, 빠진 영웅의 저장값은 바로 삭제됩니다.",
-};
 const stage = document.getElementById("stage");
 const stageBox = document.getElementById("stageBox");
 const side = document.getElementById("side");
@@ -68,6 +62,7 @@ function info(s, v) {
 function where(it) {
   return it.owner ? `${heroName(it.owner)} 착용 중` : "가방";
 }
+const s7value = (s, v) => (s === 7 ? Number(v) : v);
 function sameSlots(a, b) {
   if (!a && !b) return true;
   if (!a || !b) return false;
@@ -141,9 +136,9 @@ function gearDiffers() {
   const plan = buildPlan();
   return plan.moves.length > 0 || plan.crests.length > 0;
 }
-/* B안 전용. 저장 버튼 없이 저장값이 편성을 따라간다. 같은 팀 안의 장비 중복은 비운다. */
+/* 저장 버튼 없이 저장값이 편성을 따라간다. 같은 팀 안의 장비 중복은 비운다. */
 function syncPresetRoster(h, joined) {
-  if (VARIANT !== "B" || !saved()) return;
+  if (!saved()) return;
   const sv = saved();
   let cleared = 0;
   if (joined) {
@@ -257,12 +252,12 @@ const ACT = {
   deck(el) {
     S.deckIdx = Number(el.value);
     V.itemPop = null;
+    V.swap = null;
     V.screen = "team";
     V.inspect = 0;
     log(`덱 변경: ${deck().group}`);
   },
   // 팀을 바꿔도 장비는 바꾸지 않고 묻지도 않는다. 저장값과 다르면 [전투 시작]에서 묻는다.
-  variant(el) { location.search = `?v=${el.dataset.v}`; },
   teamTab(el) {
     const idx = Number(el.dataset.d);
     if (idx === S.deckIdx) return;
@@ -443,11 +438,40 @@ const ACT = {
   },
   leaveYes() { V.modal = null; V.drafts = {}; V.screen = "team"; log("저장하지 않고 나가기: 화면 값 버림"); },
   selectHero(el) { V.selected = Number(el.dataset.h); V.inspect = V.selected; V.slot = 0; },
+  // 슬롯을 누르면 교체 팝업. 고른 값은 화면 값만 바꾸고 실제 착용은 건드리지 않는다.
   pickSlot(el) {
     const s = Number(el.dataset.s);
+    const h = V.selected;
     V.slot = s;
-    const v = V.draft[V.selected] && V.draft[V.selected][s];
-    if (v && info(s, v)) V.itemPop = { s, v };
+    const v = (V.draft[h] && V.draft[h][s]) || 0;
+    V.swap = { h, s, pick: v, hideWorn: false, asc: false };
+  },
+  closeSwap() { V.swap = null; },
+  swapPick(el) { V.swap.pick = s7value(V.swap.s, el.dataset.v); },
+  swapHide() { V.swap.hideWorn = !V.swap.hideWorn; },
+  swapSort() { V.swap.asc = !V.swap.asc; },
+  swapDo() {
+    const { h, s, pick } = V.swap;
+    if (!V.draft[h]) V.draft[h] = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 };
+    V.draft[h][s] = pick;
+    const cleared = [];
+    // 같은 팀 중복은 허용하지 않는다. 문장은 여러 영웅이 함께 쓸 수 있어 제외.
+    if (s < 7) {
+      deckHeroes().forEach((o) => {
+        if (o !== h && V.draft[o] && V.draft[o][s] === pick) { V.draft[o][s] = 0; cleared.push(o); }
+      });
+    }
+    log(`프리셋 교체: ${heroName(h)} ${SLOT_NAME[s]} ← ${info(s, pick).name} (저장 전)${cleared.length ? `, ${cleared.map(heroName).join(", ")} 슬롯 비움` : ""}`);
+    ev("load");
+    if (cleared.length) toast(`${cleared.map(heroName).join(", ")}의 ${SLOT_NAME[s]} 슬롯을 비웠습니다.`);
+    V.swap = null;
+  },
+  swapClear() {
+    const { h, s } = V.swap;
+    V.draft[h][s] = 0;
+    log(`프리셋 해제: ${heroName(h)} ${SLOT_NAME[s]} (저장 전)`);
+    ev("load");
+    V.swap = null;
   },
   itemPop(el) { V.itemPop = { s: Number(el.dataset.s), v: el.dataset.v }; },
   closeItemPop() { V.itemPop = null; },
@@ -840,9 +864,7 @@ function richText(t) {
   return esc(t).replace(/\\n|\n/g, "<br>")
     .replace(/\[#([0-9a-fA-F]{6})\]((?:(?!\[#).)*)(?:\[#\])?/g, '<span style="color:#$1">$2</span>');
 }
-function itemPopHTML() {
-  if (!V.itemPop) return "";
-  const { s, v } = V.itemPop;
+function itemBody(s, v) {
   const it = info(s, v);
   if (!it) return "";
   const stars = "★".repeat(it.grade || 0);
@@ -862,17 +884,71 @@ function itemPopHTML() {
   }
   const base = s < 7 ? (it.base || []).map((b) => `<div class="ipBase"><span>${b.n}</span><i>${b.v}${b.u}</i></div>`).join("") : "";
   const rnd = s < 7 ? (it.rnd || []).map((b) => `<div class="ipRnd"><span class="ipOrb"></span><span>${b.n}</span><em class="u${b.ui}">★</em><i>${b.v}${b.u}</i></div>`).join("") : "";
-  return `<div class="ipDim" data-act="closeItemPop"></div><div class="sheet itemPop">
-    <button class="close" data-act="closeItemPop">✕</button>
-    <div class="ipScroll" data-keep="itemPop">
+  return `
       <div class="ipHead"><div class="ipIcon g${it.grade}"><img src="assets/item/${it.icon}.png" alt=""><div class="ipStars">${stars}</div></div>
         <div class="ipTitle"><h4>${esc(it.name)}</h4><div class="ipSub">${esc(it.tname || "")}<span></span><b>${label}</b></div>${meta}${reroll}</div></div>
       <div class="ipDesc">${richText(it.desc || "")}</div>
       ${grow}
       <div class="ipSec">장착 효과</div>
       <div class="ipOwner">${owner}</div>
-      ${awake}${base}${rnd}
-    </div></div>`;
+      ${awake}${base}${rnd}`;
+}
+function itemPopHTML() {
+  if (!V.itemPop) return "";
+  const { s, v } = V.itemPop;
+  if (!info(s, v)) return "";
+  return `<div class="ipDim" data-act="closeItemPop"></div><div class="sheet itemPop">
+    <button class="close" data-act="closeItemPop">✕</button>
+    <div class="ipScroll" data-keep="itemPop">${itemBody(s, v)}</div></div>`;
+}
+/* 프리셋 슬롯에 낄 수 있는 후보. 장비 교체 창과 같은 조건을 쓴다. */
+function swapCandidates(h, s) {
+  if (s === 7) return Object.values(D.crests).map((c) => ({ ...c, val: c.tid, owner: 0, power: 0 }));
+  return Object.values(S.items)
+    .filter((i) => i.slot === s && (s === 1 ? i.htid === h : s === 2 ? i.type === HERO[h].weapon : true))
+    .map((i) => ({ ...i, val: i.uid }));
+}
+function swapHTML() {
+  if (!V.swap) return "";
+  const { h, s, pick, hideWorn, asc } = V.swap;
+  const cur = (V.draft[h] && V.draft[h][s]) || 0;
+  const teamUser = (val) => (s < 7 ? deckHeroes().find((o) => o !== h && V.draft[o] && V.draft[o][s] === val) : 0);
+  const dir = asc ? 1 : -1;
+  const list = swapCandidates(h, s)
+    .filter((c) => !hideWorn || !c.owner || c.val === cur || c.owner === h)
+    .sort((a, b) => (b.val === cur) - (a.val === cur) || dir * (a.grade - b.grade) || dir * ((a.power || 0) - (b.power || 0)));
+  const cells = list.map((c) => {
+    const user = teamUser(c.val);
+    return `<div class="swCell" data-act="swapPick" data-v="${c.val}">
+      <div class="swIcon g${c.grade} ${c.val === pick ? "picked" : ""}"><img src="assets/item/${c.icon}.png" alt="">${s < 7 ? `<span class="plus">+${c.lb}</span>` : ""}
+        ${c.owner ? `<img class="swOwner" src="${heroImg(c.owner)}" alt="${esc(heroName(c.owner))}" title="${esc(heroName(c.owner))} 착용 중">` : ""}</div>
+      <div class="swPow">${c.power ? `◈ ${c.power}` : `★${c.grade}`}</div>
+      ${c.val === cur ? '<span class="swTag cur">현재 프리셋</span>' : user ? `<span class="swTag mate">${esc(heroName(user))}</span>` : ""}</div>`;
+  }).join("");
+  const it = info(s, pick);
+  const user = pick ? teamUser(pick) : 0;
+  const notes = [];
+  if (it && it.alive && pick !== cur) {
+    if (user) notes.push(`${heroName(user)}의 ${SLOT_NAME[s]} 슬롯이 비워집니다.`);
+    if (s < 7 && it.owner && it.owner !== h) notes.push(isArena() ? `${heroName(it.owner)}의 실제 착용은 그대로입니다.` : `${heroName(it.owner)}의 실제 장비는 [장비 적용] 때 옮겨집니다.`);
+  }
+  const shared = it && it.alive ? otherTabsUsing(s, pick) : [];
+  if (shared.length) notes.push(`${shared.join(", ")}에도 저장된 장비입니다.`);
+  const btn = !pick ? "" : pick === cur
+    ? '<button class="btn green" data-act="swapClear">프리셋에서 해제</button>'
+    : '<button class="btn gold" data-act="swapDo">교체</button>';
+  return `<div class="ipDim" data-act="closeSwap"></div>
+    <div class="sheet swInfo">
+      <div class="ipScroll" data-keep="swapInfo">${it ? itemBody(s, pick) : `<div class="swEmpty">${esc(heroName(h))}의 ${SLOT_NAME[s]} 슬롯이 비어 있습니다.<br>오른쪽에서 장비를 고르세요.</div>`}</div>
+      ${btn || notes.length ? `<div class="swFoot">${notes.map((t) => `<p>${esc(t)}</p>`).join("")}${btn}</div>` : ""}
+    </div>
+    <div class="sheet swList">
+      <div class="swHead">${esc(heroName(h))} · ${SLOT_NAME[s]} 프리셋 교체</div>
+      <div class="swGrid" data-keep="swapList">${cells || '<div class="swEmpty">고를 수 있는 장비가 없습니다.</div>'}</div>
+      <div class="swBar"><label class="swHide" data-act="swapHide"><i class="${hideWorn ? "on" : ""}"></i>장착중인 장비 리스트에서 감추기</label>
+        <button class="swSort" data-act="swapSort">희귀도 ${asc ? "▲" : "▼"}</button></div>
+    </div>
+    <button class="close swClose" data-act="closeSwap">✕</button>`;
 }
 function modalHTML() {
   const m = V.modal;
@@ -964,7 +1040,6 @@ function sidePanel() {
   const logs = V.log.map((l) => `<div><span>${l.t}</span>${esc(l.msg)}</div>`).join("");
   return `<h2>테스트 도구</h2>
     <div class="note">게임 화면이 아닌 확인용 패널입니다. 상태는 새로 고치면 처음으로 돌아갑니다.</div>
-    <div class="variant">${["A", "B"].map((v) => `<button class="${v === VARIANT ? "on" : ""}" data-act="variant" data-v="${v.toLowerCase()}">${v}안</button>`).join("")}<p>${VARIANT_RULE[VARIANT]}</p></div>
     <div class="ctl"><select data-change="deck">${opts}</select><button class="reset" data-act="reset">처음부터</button></div>
     <h3>진행 순서 (자동 체크)</h3>${steps}
     <h3>세 값 비교</h3>${tbl}
@@ -977,6 +1052,7 @@ function render() {
   let html = teamScreen();
   if (V.screen === "preset") html += presetScreen();
   if (V.screen === "gear") html += gearScreen();
+  html += swapHTML();
   html += itemPopHTML();
   html += modalHTML();
   if (V.toast) html += `<div class="toast">${esc(V.toast)}</div>`;
