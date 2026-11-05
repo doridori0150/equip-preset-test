@@ -509,22 +509,23 @@ function presetCheck() {
   if (isArena()) {
     deckHeroes().forEach((h) => {
       if (!sv[h]) return;
-      [1, 2, 3, 4, 5, 6].forEach((s) => { if (sv[h][s] && !S.items[sv[h][s]]) add(h, `${SLOT_NAME[s]}(장비 없음)`, "gone"); });
+      [1, 2, 3, 4, 5, 6].forEach((s) => { if (sv[h][s] && !S.items[sv[h][s]]) add(h, `${SLOT_NAME[s]}(저장 장비 분해됨)`, "gone"); });
     });
   } else {
     const plan = buildPlan();
     plan.moves.forEach((m) => add(m.h, SLOT_NAME[m.s], "diff"));
     plan.crests.forEach((c) => add(c.h, SLOT_NAME[7], "diff"));
-    plan.missing.forEach((m) => add(m.h, `${SLOT_NAME[m.s]}(장비 없음)`, "gone"));
+    plan.missing.forEach((m) => add(m.h, `${SLOT_NAME[m.s]}(저장 장비 분해됨)`, "gone"));
   }
-  deckHeroes().forEach((h) => { if (!sv[h]) add(h, "미설정", "unset"); });
+  deckHeroes().forEach((h) => { if (!sv[h]) add(h, "저장 안 함", "unset"); });
   if (!by.size) return { text: isArena() ? "저장됨" : "일치", cls: "ok", warn: false, lines: [], kinds: [] };
   // 프리셋은 필요할 때 쓰는 기능이다. 저장을 안 했거나 편성을 바꾼 것만으로는 전투를 막지 않는다.
   const warn = kinds.has("diff") || (isArena() && kinds.has("gone"));
   const n = by.size;
   const only = kinds.size === 1 ? [...kinds][0] : "";
-  const text = only === "gone" ? `영웅 ${n}명 장비 없음` : only === "unset" ? `영웅 ${n}명 미설정` : `영웅 ${n}명 다름`;
-  const lines = [...by].map(([h, labels]) => `${heroName(h)}: ${labels.join(", ")}`);
+  const text = only === "gone" ? `영웅 ${n}명 저장 장비 분해됨` : only === "unset" ? `영웅 ${n}명 저장 안 함` : `영웅 ${n}명 다름`;
+  // 전투에 영향이 없으면(현재 장비로 그대로 싸움) 상세 줄은 보이지 않는다.
+  const lines = warn ? [...by].map(([h, labels]) => `${heroName(h)}: ${labels.join(", ")}`) : [];
   return { text, cls: warn ? "bad" : "none", warn, lines, kinds: [...kinds] };
 }
 /* 이 값이 그대로면 유저가 이미 확인하고 넘긴 상태로 보고 다시 묻지 않는다. */
@@ -534,7 +535,7 @@ function gearSignature() {
 const gearAcked = () => S.battleAck[S.deckIdx] === gearSignature();
 function preBattleMessage(row) {
   if (deckHeroes().length < deck().max) return "팀 편성이 완료되지 않았습니다.";
-  if (isArena()) return "저장된 장비 중 없어진 장비가 있습니다.";
+  if (isArena()) return "저장한 장비 중 분해된 장비가 있어 그 칸 없이 전투합니다.";
   return "저장된 장비와 현재 장비가 다릅니다.";
 }
 
@@ -597,7 +598,7 @@ function teamScreen() {
 
 const STATUS_TAG = {
   unset: '<span class="tag unset">미설정</span>',
-  gone: '<span class="tag gone">장비 없음</span>',
+  gone: '<span class="tag gone">저장 장비 분해</span>',
   diff: '<span class="tag diff">변경</span>',
   ok: "",
 };
@@ -605,7 +606,7 @@ function bannerState() {
   const hs = deckHeroes();
   const c = (st) => hs.filter((h) => heroStatus(h) === st).length;
   if (c("unset")) return { status: "unset", text: `장비 미설정 영웅 ${c("unset")}명` };
-  if (c("gone")) return { status: "gone", text: `장비가 없어진 영웅 ${c("gone")}명` };
+  if (c("gone")) return { status: "gone", text: `저장 장비가 분해된 영웅 ${c("gone")}명` };
   if (c("diff")) return { status: "diff", text: `현재 장비와 다른 영웅 ${c("diff")}명` };
   if (isDirty()) return { status: "", text: "저장 전 변경 사항이 있습니다" };
   return { status: "", text: isArena() ?"모든 영웅의 장비가 저장되어 있습니다" : "모든 영웅의 장비가 저장값과 같습니다" };
@@ -619,8 +620,8 @@ function slotHTML(s, v, h, act) {
     inner = `<img src="assets/item/${it.icon}.png" alt="">${s < 7 ? `<span class="plus">+${it.lb}</span>` : ""}`;
     if (v !== a[s]) tag = `<span class="tag diff">${isArena() ? "현재와 다름" : "변경"}</span>`;
   } else if (it) {
-    inner = "<span>장비 없음</span>";
-    tag = '<span class="tag gone">장비 없음</span>';
+    inner = "<span>저장 장비<br>분해됨</span>";
+    tag = `<span class="tag gone">${isArena() ? "이 칸 없이 전투" : a[s] ? "현재 장비 유지" : "비어 있음"}</span>`;
   } else {
     inner = "<span>비어 있음</span>";
     if (V.draft[h] && a[s] && !isArena()) tag = '<span class="tag keep">현재 유지</span>';
@@ -653,8 +654,9 @@ function cmpCard(label, s, it, extra) {
     const stat = s < 7 ? `돌파 ${it.lb} · 품질 ${it.q}` : "등록된 문장";
     sub = extra ? `${stat}<br>${extra}` : stat;
   } else if (it) {
+    icon = '<div class="slot empty"><span>분해됨</span></div>';
     name = esc(it.name);
-    sub = "분해되어 없음";
+    sub = "저장한 장비가 분해됨";
   }
   const click = it ? `data-act="itemPop" data-s="${s}" data-v="${it.uid || it.tid}"` : "";
   return `<div class="cmpCard ${it ? "click" : ""}" ${click}><div class="cmpLabel">${label}</div><div class="cmpBody">${icon}<div class="cmpText"><b>${name}</b><span>${sub}</span></div></div></div>`;
