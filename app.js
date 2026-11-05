@@ -691,7 +691,6 @@ function bannerState() {
   if (isDirty()) return { status: "", text: "저장 전 변경 사항이 있습니다" };
   return { status: "", text: isArena() ?"모든 영웅의 장비가 저장되어 있습니다" : "모든 영웅의 장비가 저장값과 같습니다" };
 }
-/* 평소에는 슬롯마다 아이콘 1개를 크게 보여 주고, 현재와 프리셋이 다른 슬롯만 둘을 나란히 보여 준다. */
 function cmpSlot(s, v, it, emptyText) {
   if (it && it.alive) return `<div class="slot g${it.grade}"><img src="assets/item/${it.icon}.png" alt="">${s < 7 ? `<span class="plus">+${it.lb}</span>` : ""}</div>`;
   if (it) return '<div class="slot empty"><span>분해됨</span></div>';
@@ -711,6 +710,7 @@ function compareState(h, s) {
   if (!v && cur) return { cls: "keep", tag: "저장 안 함", count: true };
   return { cls: "", tag: "" };
 }
+/* 슬롯 8칸을 한 줄로 놓고, 프리셋과 다른 슬롯만 현재 장비 아래에 프리셋 장비를 보여 준다. */
 function compareHTML(h) {
   const a = actualOf(h);
   const d = V.draft[h];
@@ -718,12 +718,11 @@ function compareHTML(h) {
     const v = d ? d[s] || 0 : 0;
     const cur = a[s] || 0;
     const st = compareState(h, s);
-    const pair = st.count && (v || cur);
-    const body = pair
-      ? `<div class="pPair"><div><small>현재</small>${cmpSlot(s, cur, info(s, cur), "없음")}</div><div><small>프리셋</small>${cmpSlot(s, v, info(s, v), "없음")}</div></div>`
-      : `<div class="pOne">${cmpSlot(s, cur, info(s, cur), "비어 있음")}</div>`;
+    const under = st.count
+      ? `<div class="pUnder"><small>프리셋</small>${cmpSlot(s, v, info(s, v), "없음")}<div class="pTag">${esc(st.tag)}</div></div>`
+      : "";
     return `<div class="pSlot ${st.cls} ${V.slot === s ? "picked" : ""}" data-act="pickSlot" data-s="${s}" title="${SLOT_NAME[s]} 교체">
-      <div class="pName">${SLOT_NAME[s]}</div>${body}<div class="pTag">${esc(st.tag)}</div></div>`;
+      <div class="pName">${SLOT_NAME[s]}</div>${cmpSlot(s, cur, info(s, cur), "비어 있음")}${under}</div>`;
   }).join("");
   return `<div class="pGrid">${cells}</div>`;
 }

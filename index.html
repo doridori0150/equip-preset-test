@@ -97,7 +97,7 @@ button { font: inherit; cursor: pointer; }
 .tag.diff { background: #c9dff4; color: #1d4e80; }
 .tag.keep { background: #e5ddcb; color: #5d5140; }
 .tag.ok { background: #d9e9c5; color: #3d5f18; }
-.pRight { padding: 16px 24px; min-height: 0; position: relative; }
+.pRight { padding: 16px 12px; min-height: 0; position: relative; }
 .pHero { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); padding: 0 40px 10px 0; }
 .pHero img { width: 66px; height: 66px; border-radius: 50%; }
 .pHero .t { flex: 1; min-width: 0; }
@@ -214,22 +214,18 @@ button { font: inherit; cursor: pointer; }
 .card .cnt { font-weight: 700; }
 .card.low .cnt { color: #c02a1c; font-weight: 800; font-size: 15px; }
 .card .ct .tag { margin-right: 2px; padding: 0 5px; font-size: 11px; }
-.pGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 174px; gap: 8px; margin-top: 12px; }
-.pSlot { display: flex; flex-direction: column; align-items: center; padding: 6px 2px 4px; border: 2px solid transparent; border-radius: 10px; cursor: pointer; }
+.pGrid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-auto-rows: 240px; gap: 4px; margin-top: 12px; }
+.pSlot { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0 4px; border: 2px solid transparent; border-radius: 10px; cursor: pointer; min-width: 0; }
 .pSlot.diff { background: #fbe7b3; } .pSlot.gone { background: #f7d5cb; } .pSlot.keep { background: #e9e1d0; }
 .pSlot.picked { border-color: var(--gold-deep); }
-.pName { font-size: 14px; font-weight: 700; color: var(--ink-soft); }
-.pOne, .pPair { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; }
-.pOne .slot { width: 112px; height: 112px; }
-.pOne .slot img { width: 94px; height: 94px; }
-.pPair { gap: 4px; }
-.pPair > div { display: flex; flex-direction: column; align-items: center; gap: 3px; }
-.pPair small { font-size: 11.5px; font-weight: 700; color: #5d5140; }
-.pPair .slot { width: 66px; height: 66px; border-width: 3px; }
-.pPair .slot img { width: 54px; height: 54px; }
-.pGrid .slot .plus { right: -4px; top: -3px; padding: 0 5px; font-size: 12px; }
+.pName { font-size: 13.5px; font-weight: 700; color: var(--ink-soft); white-space: nowrap; }
+.pGrid .slot { flex: none; width: 66px; height: 66px; }
+.pGrid .slot img { width: 56px; height: 56px; }
+.pGrid .slot .plus { right: -5px; top: -3px; padding: 0 5px; font-size: 12px; }
 .pGrid .slot.empty span { font-size: 12px; text-align: center; }
-.pTag { height: 20px; font-size: 13px; font-weight: 700; color: #7a4a10; }
+.pUnder { display: flex; flex-direction: column; align-items: center; gap: 3px; margin-top: 8px; width: 100%; }
+.pUnder small { font-size: 12px; font-weight: 700; color: #5d5140; }
+.pTag { padding: 0 2px; font-size: 13px; line-height: 1.25; font-weight: 700; text-align: center; word-break: keep-all; color: #7a4a10; }
 .pSlot.gone .pTag { color: #8e2a15; } .pSlot.keep .pTag { color: #5d5140; }
 .pbDetail { padding: 2px 18px 0; font-size: 13.5px; line-height: 1.6; color: #4a3e2e; }
 .modal .sub { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
