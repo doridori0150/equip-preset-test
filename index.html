@@ -140,7 +140,7 @@ button { font: inherit; cursor: pointer; }
 .swFoot .btn { width: 100%; padding: 11px; font-size: 18px; }
 .swEmpty { padding: 90px 20px; text-align: center; font-size: 15px; line-height: 1.7; color: var(--text-soft); }
 .swHead { flex: none; padding: 12px 18px; font-size: 16px; font-weight: 700; border-bottom: 1px solid #3a3127; }
-.swGrid { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: 156px; gap: 8px; padding: 14px 14px; }
+.swGrid { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: 172px; gap: 8px; padding: 14px 14px; }
 .swCell { position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer; min-width: 0; }
 .swIcon { position: relative; width: 100px; height: 100px; padding: 6px; border-radius: 14px; background: radial-gradient(#3b342c, #1d1915); border: 3px solid #7a6e5b; }
 .swIcon > img:first-child { width: 82px; height: 82px; }
@@ -220,6 +220,19 @@ button { font: inherit; cursor: pointer; }
 .pbRow { display: flex; justify-content: space-between; align-items: center; padding: 6px 18px; border-radius: 16px; background: #efe7d6; font-size: 15px; }
 .pbRow span { font-weight: 700; }
 .pbRow .ok { color: #2f8a45; } .pbRow .bad { color: #c02a1c; } .pbRow .none { color: var(--ink-soft); }
+.cmpGrid { display: grid; grid-template-columns: 46px repeat(8, minmax(0, 1fr)); gap: 3px; margin-top: 12px; }
+.cmpLabels, .cmpCol { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 6px 1px; border-radius: 8px; }
+.cmpCol { cursor: pointer; border: 2px solid transparent; }
+.cmpCol.diff { background: #fbe7b3; } .cmpCol.gone { background: #f7d5cb; } .cmpCol.keep { background: #e9e1d0; }
+.cmpCol.picked { border-color: var(--gold-deep); }
+.cmpName { height: 32px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 11.5px; line-height: 1.2; color: var(--ink-soft); }
+.cmpLabels b { height: 58px; display: flex; align-items: center; font-size: 12.5px; color: var(--ink); }
+.cmpGrid .slot { width: 58px; height: 58px; border-width: 3px; }
+.cmpGrid .slot img { width: 46px; height: 46px; }
+.cmpGrid .slot .plus { right: -5px; top: -4px; padding: 0 4px; font-size: 10.5px; }
+.cmpGrid .slot.empty span { font-size: 10.5px; text-align: center; }
+.cmpTag { height: 30px; display: flex; align-items: center; text-align: center; font-size: 11px; line-height: 1.15; font-weight: 700; color: #7a4a10; }
+.cmpCol.gone .cmpTag { color: #8e2a15; } .cmpCol.keep .cmpTag { color: #5d5140; }
 .pbDetail { padding: 2px 18px 0; font-size: 13.5px; line-height: 1.6; color: #4a3e2e; }
 .modal .sub { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
 .modal .row { display: flex; gap: 10px; justify-content: center; }

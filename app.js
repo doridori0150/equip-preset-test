@@ -3,7 +3,7 @@
 //   실제 착용(S.items·S.crest) → [현재 장비 불러오기] → 화면 값(V.draft) → [저장] → 저장값(S.presets) → [장비 적용] → 실제 착용
 const D = window.PRESET_DATA;
 const HERO = D.heroes;
-const SLOT_IDS = [1, 2, 3, 4, 5, 6, 7];
+const SLOT_IDS = [1, 2, 3, 4, 5, 6, 7, 8];
 const SLOT_NAME = D.slots;
 const MSG_PARTIAL = "프리셋의 일부 장비가 존재하지 않아 일부 장비가 교체되지 않았습니다.";
 const MSG_NO_PRESET = "현재 저장된 프리셋이 없습니다.\n편성된 팀 기준으로 불러오시겠습니까?";
@@ -17,10 +17,11 @@ function fresh() {
   const items = {};
   D.items.forEach((i) => { items[i.uid] = { ...i }; });
   const crest = {};
-  Object.values(HERO).forEach((h) => { crest[h.tid] = h.crest || 0; });
+  const wisdom = {};
+  Object.values(HERO).forEach((h) => { crest[h.tid] = h.crest || 0; wisdom[h.tid] = h.wisdom || 0; });
   const decks = {};
   D.decks.forEach((d) => { decks[d.index] = { ...d, cells: [...d.cells] }; });
-  S = { items, deleted: {}, crest, decks, presets: {}, savedRoster: {}, battleAck: {}, deckIdx: D.decks[0].index };
+  S = { items, deleted: {}, crest, decks, wisdom, presets: {}, conflict: {}, battleAck: {}, deckIdx: D.decks[0].index };
   V = { screen: "team", draft: {}, drafts: {}, selected: 0, slot: 0, gearHero: 0, gearSlot: 2, modal: null, toast: "", inspect: 0,
         done: new Set(), loadedAfterChange: false, log: [] };
   log("테스트 시작: 계정 데이터 불러옴");
@@ -49,20 +50,21 @@ function otherTabsUsing(s, uid) {
 }
 
 function actualOf(h) {
-  const r = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: S.crest[h] || 0 };
+  const r = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: S.crest[h] || 0, 8: S.wisdom[h] || 0 };
   Object.values(S.items).forEach((i) => { if (i.owner === h) r[i.slot] = i.uid; });
   return r;
 }
 function info(s, v) {
   if (!v) return null;
   if (s === 7) return D.crests[v] ? { ...D.crests[v], alive: true } : null;
+  if (s === 8) return D.wisdoms[v] ? { ...D.wisdoms[v], alive: true } : null;
   if (S.items[v]) return { ...S.items[v], alive: true };
   return S.deleted[v] ? { ...S.deleted[v], alive: false } : null;
 }
 function where(it) {
   return it.owner ? `${heroName(it.owner)} 착용 중` : "가방";
 }
-const s7value = (s, v) => (s === 7 ? Number(v) : v);
+const s7value = (s, v) => (s >= 7 ? Number(v) : v);
 function sameSlots(a, b) {
   if (!a && !b) return true;
   if (!a || !b) return false;
@@ -82,16 +84,10 @@ function heroStatus(h) {
   // 결투장은 저장값으로 전투하므로 실제 착용과 달라도 문제가 아니다.
   return gone ? "gone" : diff && !isArena() ? "diff" : "ok";
 }
-const filled = (d) => SLOT_IDS.filter((s) => d[s] && (s === 7 || S.items[d[s]])).length;
+const filled = (d) => SLOT_IDS.filter((s) => d[s] && (s >= 7 || S.items[d[s]])).length;
 function isDirty() {
   const sv = saved() || {};
   return deckHeroes().some((h) => !sameSlots(V.draft[h], sv[h]));
-}
-function hasOutOfDeck() {
-  const sv = saved();
-  if (!sv) return false;
-  const cur = new Set(deckHeroes());
-  return Object.keys(sv).some((h) => !cur.has(Number(h)));
 }
 function dirtyDeck(idx) {
   const dr = idx === S.deckIdx ? V.draft : V.drafts[idx];
@@ -110,7 +106,7 @@ function differsFromActual() {
 function saveCurrentLines() {
   const sv = saved();
   const out = [];
-  const nameOf = (s, v) => { const it = info(s, v); return it ? it.name : "없음"; };
+  const nameOf = (s, v) => { const it = info(s, v); return it ? `${it.name}${s < 7 && it.alive ? ` +${it.lb}` : ""}` : "없음"; };
   deckHeroes().forEach((h) => {
     if (!sv[h]) { out.push(`${heroName(h)}: 새로 저장`); return; }
     const a = actualOf(h);
@@ -120,50 +116,32 @@ function saveCurrentLines() {
   });
   return out;
 }
-const canSave = () => Object.keys(V.draft).length > 0 && (isDirty() || hasOutOfDeck());
-/* 저장 후 팀 프리셋의 편성이 달라졌는지. 편성은 팀 프리셋이 맡고, 저장 때의 명단은 비교에만 쓴다. */
-function rosterChange() {
-  if (!saved()) return null;
-  const was = S.savedRoster[S.deckIdx] || [];
-  const now = deckHeroes();
-  const added = now.filter((h) => !was.includes(h));
-  const removed = was.filter((h) => !now.includes(h));
-  return added.length || removed.length ? { added, removed } : null;
-}
-/* 저장값은 있지만 지금 편성에 없는 영웅. 다음 덮어쓰기 때 저장값이 지워진다. */
+const canSave = () => Object.keys(V.draft).length > 0 && isDirty();
 function gearDiffers() {
   if (isArena() || !saved()) return false;
   const plan = buildPlan();
   return plan.moves.length > 0 || plan.crests.length > 0;
 }
-/* 저장 버튼 없이 저장값이 편성을 따라간다. 같은 팀 안의 장비 중복은 비운다. */
+/* 저장값은 팀 프리셋 + 영웅 단위로 남는다. 빠져도 지우지 않고, 돌아오면 복원한다.
+   처음 들어온 영웅은 현재 장비로 저장한다. 팀원과 겹치는 장비는 들어온 영웅 쪽 슬롯을 비운다. */
 function syncPresetRoster(h, joined) {
-  if (!saved()) return;
   const sv = saved();
-  let cleared = 0;
-  if (joined) {
-    sv[h] = actualOf(h);
-    Object.keys(sv).map(Number).filter((o) => o !== h).forEach((o) => {
-      [1, 2, 3, 4, 5, 6].forEach((s) => {
-        if (sv[h][s] && sv[o][s] === sv[h][s]) { sv[o][s] = 0; cleared++; }
-      });
+  if (!sv) return;
+  if (!joined) { log(`편성에서 제외: ${heroName(h)} 저장값 유지`); return; }
+  const restored = !!sv[h];
+  if (!restored) sv[h] = actualOf(h);
+  const cleared = [];
+  deckHeroes().filter((o) => o !== h && sv[o]).forEach((o) => {
+    [1, 2, 3, 4, 5, 6].forEach((s) => {
+      if (sv[h][s] && sv[o][s] === sv[h][s]) {
+        sv[h][s] = 0;
+        S.conflict[`${S.deckIdx}:${h}:${s}`] = o;
+        cleared.push(`${SLOT_NAME[s]}(${heroName(o)} 사용 중)`);
+      }
     });
-  } else {
-    delete sv[h];
-  }
-  S.savedRoster[S.deckIdx] = [...deckHeroes()];
-  if (!Object.keys(sv).length) {
-    delete S.presets[S.deckIdx];
-    delete S.savedRoster[S.deckIdx];
-  }
-  log(`프리셋 자동 반영: ${heroName(h)} ${joined ? "현재 장비로 추가" : "저장값 삭제"}${cleared ? `, 겹친 슬롯 ${cleared}칸 비움` : ""}`);
-  toast(`장비 프리셋에도 반영했습니다: ${heroName(h)} ${joined ? "추가" : "제외"}`);
-}
-function outOfDeckHeroes() {
-  const sv = saved();
-  if (!sv) return [];
-  const now = deckHeroes();
-  return Object.keys(sv).map(Number).filter((h) => !now.includes(h));
+  });
+  log(`프리셋 ${restored ? "복원" : "자동 저장"}: ${heroName(h)}${cleared.length ? `, 비운 슬롯 ${cleared.join(", ")}` : ""}`);
+  toast(`${heroName(h)}: ${restored ? "저장해 둔 장비를 복원했습니다" : "현재 장비로 저장했습니다"}${cleared.length ? `. 겹치는 슬롯 ${cleared.length}칸은 비웠습니다` : ""}`);
 }
 
 /* 저장값 → 실제 착용 계획. 빈 값과 삭제된 장비는 벗기지 않고 현재 장비를 유지한다. */
@@ -182,7 +160,7 @@ function buildPlan() {
       if (!it) { plan.missing.push({ h, s, name: S.deleted[v] ? S.deleted[v].name : "?" }); return; }
       if (it.owner !== h) plan.moves.push({ h, s, uid: v, from: it.owner, name: it.name });
     });
-    if (p[7] && p[7] !== a[7]) plan.crests.push({ h, tid: p[7] });
+    [7, 8].forEach((s) => { if (p[s] && p[s] !== a[s]) plan.crests.push({ h, s, tid: p[s] }); });
   });
   return plan;
 }
@@ -407,6 +385,12 @@ const ACT = {
     log(`강화: ${it.name} 돌파 ${it.lb} (같은 UUID를 저장한 프리셋에 자동 반영)`);
     ev("enhance", it.uid);
   },
+  equipWisdom(el) {
+    const h = V.gearHero;
+    S.wisdom[h] = Number(el.dataset.t);
+    log(`지식 교체: ${heroName(h)} ← ${D.wisdoms[el.dataset.t].name}`);
+    ev("change");
+  },
   equipCrest(el) {
     const h = V.gearHero;
     S.crest[h] = Number(el.dataset.t);
@@ -438,13 +422,12 @@ const ACT = {
   },
   leaveYes() { V.modal = null; V.drafts = {}; V.screen = "team"; log("저장하지 않고 나가기: 화면 값 버림"); },
   selectHero(el) { V.selected = Number(el.dataset.h); V.inspect = V.selected; V.slot = 0; },
-  // 슬롯을 누르면 교체 팝업. 고른 값은 화면 값만 바꾸고 실제 착용은 건드리지 않는다.
+  // 슬롯을 누르면 교체 팝업. [교체]는 실제 장비를 바꾼다. 프리셋은 [현재 장비로 저장]으로 따로 남긴다.
   pickSlot(el) {
     const s = Number(el.dataset.s);
     const h = V.selected;
     V.slot = s;
-    const v = (V.draft[h] && V.draft[h][s]) || 0;
-    V.swap = { h, s, pick: v, hideWorn: false, asc: false };
+    V.swap = { h, s, pick: actualOf(h)[s] || 0, hideWorn: false, asc: false };
   },
   closeSwap() { V.swap = null; },
   swapPick(el) { V.swap.pick = s7value(V.swap.s, el.dataset.v); },
@@ -452,25 +435,15 @@ const ACT = {
   swapSort() { V.swap.asc = !V.swap.asc; },
   swapDo() {
     const { h, s, pick } = V.swap;
-    if (!V.draft[h]) V.draft[h] = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 };
-    V.draft[h][s] = pick;
-    const cleared = [];
-    // 같은 팀 중복은 허용하지 않는다. 문장은 여러 영웅이 함께 쓸 수 있어 제외.
-    if (s < 7) {
-      deckHeroes().forEach((o) => {
-        if (o !== h && V.draft[o] && V.draft[o][s] === pick) { V.draft[o][s] = 0; cleared.push(o); }
-      });
-    }
-    log(`프리셋 교체: ${heroName(h)} ${SLOT_NAME[s]} ← ${info(s, pick).name} (저장 전)${cleared.length ? `, ${cleared.map(heroName).join(", ")} 슬롯 비움` : ""}`);
-    ev("load");
-    if (cleared.length) toast(`${cleared.map(heroName).join(", ")}의 ${SLOT_NAME[s]} 슬롯을 비웠습니다.`);
-    V.swap = null;
+    if (s < 7 && S.items[pick].owner && S.items[pick].owner !== h) { V.modal = { type: "swapConfirm" }; return; }
+    doSwap();
   },
+  swapConfirmYes() { V.modal = null; doSwap(); },
   swapClear() {
-    const { h, s } = V.swap;
-    V.draft[h][s] = 0;
-    log(`프리셋 해제: ${heroName(h)} ${SLOT_NAME[s]} (저장 전)`);
-    ev("load");
+    const { h, s, pick } = V.swap;
+    S.items[pick].owner = 0;
+    log(`실제 장비 해제: ${heroName(h)} ${SLOT_NAME[s]}`);
+    ev("change");
     V.swap = null;
   },
   itemPop(el) { V.itemPop = { s: Number(el.dataset.s), v: el.dataset.v }; },
@@ -549,15 +522,33 @@ const ACT = {
       if (cur && cur !== m.uid) S.items[cur].owner = 0;
       S.items[m.uid].owner = m.h;
     });
-    plan.crests.forEach((c) => { S.crest[c.h] = c.tid; });
+    plan.crests.forEach((c) => { if (c.s === 8) S.wisdom[c.h] = c.tid; else S.crest[c.h] = c.tid; });
     V.modal = null;
     ev("apply");
-    log(`장비 적용: 교체 ${plan.moves.length}개, 문장 ${plan.crests.length}개, 유지 ${plan.keep.length}칸, 삭제된 장비 ${plan.missing.length}개`);
+    log(`장비 적용: 교체 ${plan.moves.length}개, 문장·지식 ${plan.crests.length}개, 유지 ${plan.keep.length}칸, 삭제된 장비 ${plan.missing.length}개`);
     if (plan.missing.length) { ev("missing"); toast(MSG_PARTIAL); } else toast("저장된 장비로 교체했습니다.");
   },
   closeModal() { V.modal = null; },
 };
 
+function doSwap() {
+  const { h, s, pick } = V.swap;
+  const name = info(s, pick).name;
+  if (s === 7) S.crest[h] = pick;
+  else if (s === 8) S.wisdom[h] = pick;
+  else {
+    const it = S.items[pick];
+    const from = it.owner;
+    const cur = actualOf(h)[s];
+    if (cur) S.items[cur].owner = 0;
+    it.owner = h;
+    if (from && from !== h) log(`${heroName(from)}에게서 해제: ${name}`);
+  }
+  log(`실제 장비 교체: ${heroName(h)} ${SLOT_NAME[s]} ← ${name}`);
+  ev("change");
+  V.swap = null;
+  toast("실제 장비를 교체했습니다. 프리셋에 남기려면 [현재 장비로 저장]을 누르세요.");
+}
 /* 전투 화면은 없으므로 어떤 장비로 시작했는지만 기록한다. */
 function startBattle(what) {
   log(`전투 시작: ${deck().label}, ${what}`);
@@ -583,7 +574,7 @@ function presetCheck() {
   } else {
     const plan = buildPlan();
     plan.moves.forEach((m) => add(m.h, SLOT_NAME[m.s], "diff"));
-    plan.crests.forEach((c) => add(c.h, SLOT_NAME[7], "diff"));
+    plan.crests.forEach((c) => add(c.h, SLOT_NAME[c.s], "diff"));
     plan.missing.forEach((m) => add(m.h, `${SLOT_NAME[m.s]}(저장 장비 분해됨)`, "gone"));
   }
   deckHeroes().forEach((h) => { if (!sv[h]) add(h, "저장 안 함", "unset"); });
@@ -609,22 +600,20 @@ function preBattleMessage(row) {
 }
 
 function doSave() {
-  const out = {};
+  const out = { ...(saved() || {}) };
   deckHeroes().forEach((h) => {
     if (!V.draft[h]) return;
+    SLOT_IDS.forEach((s) => { delete S.conflict[`${S.deckIdx}:${h}:${s}`]; });
     const c = { ...V.draft[h] };
     [1, 2, 3, 4, 5, 6].forEach((s) => { if (c[s] && !S.items[c[s]]) c[s] = 0; });
     out[h] = c;
   });
   delete V.drafts[S.deckIdx];
   const first = !saved();
-  const dropped = outOfDeckHeroes();
   S.presets[S.deckIdx] = out;
-  S.savedRoster[S.deckIdx] = [...deckHeroes()];
-  V.draft = {};
-  Object.entries(out).forEach(([h, c]) => { V.draft[h] = { ...c }; });
+  V.draft = draftFromSaved(S.deckIdx);
   ev("save");
-  log(`${first ? "저장" : "덮어쓰기"}: 영웅 ${Object.keys(out).length}명${dropped.length ? `, 제외된 영웅 저장값 삭제: ${dropped.map(heroName).join(", ")}` : ""}`);
+  log(`${first ? "저장" : "덮어쓰기"}: 편성 영웅 ${deckHeroes().length}명`);
   toast("프리셋을 저장했습니다.");
 }
 
@@ -646,7 +635,7 @@ function teamScreen() {
         <div class="nm">${esc(h.name)}</div>
         <button class="gearBtn" data-act="openGear" data-h="${h.tid}">장비</button></div>`).join("");
   const pst = sv
-    ? `장비 프리셋: <b>저장됨</b> (영웅 ${Object.keys(sv).length}명)${rosterChange() ? "<br>저장 후 편성이 변경됨" : ""}${gearDiffers() ? "<br>저장된 장비와 다름" : ""}`
+    ? `장비 프리셋: <b>저장됨</b> (영웅 ${hs.filter((h) => sv[h]).length}명)${gearDiffers() ? "<br>저장된 장비와 다름" : ""}`
     : "장비 프리셋: 없음";
   return `<div class="team">
     <div class="topbar">팀 편성</div>
@@ -680,102 +669,56 @@ function bannerState() {
   if (isDirty()) return { status: "", text: "저장 전 변경 사항이 있습니다" };
   return { status: "", text: isArena() ?"모든 영웅의 장비가 저장되어 있습니다" : "모든 영웅의 장비가 저장값과 같습니다" };
 }
-function slotHTML(s, v, h, act) {
+/* 현재 착용과 프리셋을 슬롯별로 위아래에 놓고, 다른 칸에 색과 표시를 준다. */
+function cmpSlot(s, v, it, emptyText) {
+  if (it && it.alive) return `<div class="slot g${it.grade}"><img src="assets/item/${it.icon}.png" alt="">${s < 7 ? `<span class="plus">+${it.lb}</span>` : ""}</div>`;
+  if (it) return '<div class="slot empty"><span>분해됨</span></div>';
+  return `<div class="slot empty"><span>${emptyText}</span></div>`;
+}
+function compareState(h, s) {
+  const d = V.draft[h];
+  if (!d) return { cls: "", tag: "" };
+  const v = d[s] || 0;
+  const cur = actualOf(h)[s] || 0;
+  const it = info(s, v);
+  const mate = S.conflict[`${S.deckIdx}:${h}:${s}`];
+  if (!v && mate) return { cls: "keep", tag: `${heroName(mate)} 사용`, count: true };
+  if (it && !it.alive) return { cls: "gone", tag: "장비 없음", count: true };
+  if (v && v !== cur) return { cls: "diff", tag: "다름", count: true };
+  if (!v && cur) return { cls: "keep", tag: "저장 안 함", count: true };
+  return { cls: "", tag: "" };
+}
+function compareHTML(h) {
   const a = actualOf(h);
-  const it = info(s, v);
-  let inner, cls = "empty", tag = "";
-  if (it && it.alive) {
-    cls = `g${it.grade}`;
-    inner = `<img src="assets/item/${it.icon}.png" alt="">${s < 7 ? `<span class="plus">+${it.lb}</span>` : ""}`;
-    if (v !== a[s]) tag = `<span class="tag diff">${isArena() ? "현재와 다름" : "변경"}</span>`;
-  } else if (it) {
-    inner = "<span>저장 장비<br>분해됨</span>";
-    tag = `<span class="tag gone">${isArena() ? "이 칸 없이 전투" : a[s] ? "현재 장비 유지" : "비어 있음"}</span>`;
-  } else {
-    inner = "<span>비어 있음</span>";
-    if (V.draft[h] && a[s] && !isArena()) tag = '<span class="tag keep">현재 유지</span>';
-  }
-  return `<div class="slotBox" data-act="${act}" data-s="${s}">
-      <div class="slot ${cls} ${V.slot === s ? "picked" : ""}">${inner}</div>
-      <div class="lb">${SLOT_NAME[s]}</div>${tag}</div>`;
+  const d = V.draft[h];
+  const cols = SLOT_IDS.map((s) => {
+    const v = d ? d[s] || 0 : 0;
+    const st = compareState(h, s);
+    return `<div class="cmpCol ${st.cls} ${V.slot === s ? "picked" : ""}" data-act="pickSlot" data-s="${s}" title="${SLOT_NAME[s]} 교체">
+      <div class="cmpName">${SLOT_NAME[s]}</div>
+      ${cmpSlot(s, a[s], info(s, a[s]), "없음")}
+      ${cmpSlot(s, v, info(s, v), d ? "없음" : "미저장")}
+      <div class="cmpTag">${esc(st.tag)}</div></div>`;
+  }).join("");
+  return `<div class="cmpGrid"><div class="cmpLabels"><div class="cmpName"></div><b>현재</b><b>프리셋</b><div class="cmpTag"></div></div>${cols}</div>`;
 }
-function slotInfoText(h) {
-  if (!V.draft[h]) return "저장된 장비가 없습니다. [현재 장비 불러오기]로 이 영웅의 현재 장비를 가져올 수 있습니다.";
-  if (!V.slot) return "슬롯을 누르면 장비 정보를 볼 수 있습니다.";
-  const v = V.draft[h][V.slot];
-  const it = info(V.slot, v);
-  const a = info(V.slot, actualOf(h)[V.slot]);
-  const cur = `현재 착용: ${a ? esc(a.name) : "없음"}`;
-  if (!it) return `${SLOT_NAME[V.slot]}: 저장값 비어 있음 · ${isArena() ? "이 칸 없이 전투" : "적용해도 벗기지 않음"} · ${cur}`;
-  if (V.slot === 7) return `${esc(it.name)} · TID ${it.tid} · 여러 영웅이 함께 착용 가능 · ${cur}`;
-  if (!it.alive) return `${esc(it.name)}: 분해되어 없음 · ${isArena() ? "이 칸 없이 전투" : "적용해도 교체되지 않음"} · ${cur}`;
-  const shared = isArena() ? otherTabsUsing(V.slot, v) : [];
-  return `${esc(it.name)} · 돌파 ${it.lb} · 품질 ${it.q} · UID ${it.uid} · 위치: ${where(it)} · ${cur}${shared.length ? ` · ${shared.join(", ")}에도 저장됨` : ""}`;
-}
-/* 프리셋 값이 현재 착용과 다른 슬롯이면 나란히 비교한다. 같으면 null을 돌려 기존 장비 정보를 쓴다. */
-function cmpCard(label, s, it, extra) {
-  let icon = '<div class="slot empty"><span>없음</span></div>';
-  let name = "장비 없음";
-  let sub = extra || "";
-  if (it && it.alive) {
-    icon = `<div class="slot g${it.grade}"><img src="assets/item/${it.icon}.png" alt="">${s < 7 ? `<span class="plus">+${it.lb}</span>` : ""}</div>`;
-    name = esc(it.name);
-    const stat = s < 7 ? `돌파 ${it.lb} · 품질 ${it.q}` : "등록된 문장";
-    sub = extra ? `${stat}<br>${extra}` : stat;
-  } else if (it) {
-    icon = '<div class="slot empty"><span>분해됨</span></div>';
-    name = esc(it.name);
-    sub = "저장한 장비가 분해됨";
-  }
-  const click = it ? `data-act="itemPop" data-s="${s}" data-v="${it.uid || it.tid}"` : "";
-  return `<div class="cmpCard ${it ? "click" : ""}" ${click}><div class="cmpLabel">${label}</div><div class="cmpBody">${icon}<div class="cmpText"><b>${name}</b><span>${sub}</span></div></div></div>`;
-}
-function slotCompareHTML(h) {
-  const s = V.slot;
-  if (!s || !V.draft[h]) return null;
-  const av = actualOf(h)[s] || 0;
-  const v = V.draft[h][s] || 0;
-  if (v === av) return null;
-  const a = info(s, av);
-  const it = info(s, v);
-  let extra = "";
-  let note;
-  if (isArena()) {
-    if (!it) extra = "프리셋에 저장된 장비 없음";
-    else if (it.alive && s < 7) extra = where(it);
-    const shared = otherTabsUsing(s, v);
-    note = it && it.alive
-      ? `결투장은 프리셋 장비로 전투합니다. 실제 착용은 바뀌지 않습니다.${shared.length ? ` ${shared.join(", ")}에도 저장된 장비입니다.` : ""}`
-      : "프리셋에 장비가 없어 이 칸 없이 전투합니다. 실제 착용은 바뀌지 않습니다.";
-  } else if (!it) {
-    extra = "프리셋에 저장된 장비 없음";
-    note = "프리셋 칸이 비어 있어 [장비 적용]을 해도 현재 장비를 그대로 둡니다.";
-  } else if (!it.alive) {
-    note = a ? "프리셋 장비가 없어 [장비 적용]을 해도 현재 장비를 그대로 둡니다." : "프리셋 장비가 없어 [장비 적용]을 해도 이 칸은 비어 있습니다.";
-  } else if (s === 7) {
-    note = "[장비 적용]을 하면 프리셋 문장으로 바뀝니다. 현재 문장은 사라지지 않습니다.";
-  } else {
-    extra = where(it);
-    const out = a ? `${esc(a.name)}은(는) 가방으로 이동합니다.` : "";
-    const from = it.owner ? ` ${esc(heroName(it.owner))}에게서 해제됩니다.` : "";
-    note = `[장비 적용]을 하면 프리셋 장비로 교체합니다.${from} ${out}`.trim();
-  }
-  return `<div class="pInfo cmp"><div class="cmpRow">${cmpCard("현재 착용", s, a)}<div class="cmpArrow">${isArena() ? "≠" : "→"}</div>${cmpCard("프리셋", s, it, extra)}</div><div class="cmpNote">${note}</div></div>`;
+function compareInfo(h) {
+  if (!V.draft[h]) return "프리셋에 저장된 장비가 없습니다. 슬롯을 누르면 실제 장비를 교체합니다.";
+  const n = SLOT_IDS.filter((s) => compareState(h, s).count).length;
+  return `${n ? `현재 장비와 다른 슬롯 ${n}칸` : "현재 장비와 프리셋이 같습니다"} · 슬롯을 누르면 실제 장비를 교체합니다.`;
 }
 function presetScreen() {
   const hs = deckHeroes();
   const b = bannerState();
   const h = V.selected;
-  const d = V.draft[h];
   const cards = hs.map((t, i) => {
     const st = heroStatus(t);
     const dr = V.draft[t];
     return `<div class="card ${t === h ? "sel" : ""}" data-act="selectHero" data-h="${t}">
       <img src="${heroImg(t)}" alt="">
       <div style="min-width:0"><div class="ct">${String(i + 1).padStart(2, "0")}</div><div class="nm">${esc(heroName(t))}</div>
-      <div class="ct">${dr ? `${filled(dr)}/7 ` : ""}${STATUS_TAG[st]}</div></div></div>`;
+      <div class="ct">${dr ? `${filled(dr)}/8 ` : ""}${STATUS_TAG[st]}</div></div></div>`;
   }).join("");
-  const slots = SLOT_IDS.map((s) => slotHTML(s, d ? d[s] : 0, h, "pickSlot")).join("");
   const allSame = hs.every((t) => sameSlots(V.draft[t], actualOf(t)));
   const dirty = isDirty();
   const plan = buildPlan();
@@ -783,18 +726,10 @@ function presetScreen() {
   const arena = isArena();
   let msg = arena ? "프리셋을 저장하면 이 장비로 전투합니다. 실제 착용은 바뀌지 않습니다." : "프리셋을 저장하면 이 편성의 장비 상태를 다시 적용할 수 있습니다.";
   if (dirty) msg = "저장하지 않은 변경 사항이 있습니다.";
-  else if (arena && saved() && !rosterChange()) msg = "저장된 장비로 전투합니다. 실제 착용은 바뀌지 않습니다.";
+  else if (arena && saved()) msg = "저장된 장비로 전투합니다. 실제 착용은 바뀌지 않습니다.";
   else if (saved() && canApply) msg = "저장된 장비와 현재 장비가 다릅니다. [현재 장비로 저장] 또는 [장비 적용]을 선택할 수 있습니다.";
-  else if (saved() && rosterChange() && differsFromActual()) msg = "저장 후 편성이 변경되었습니다. [현재 장비로 저장]을 누르면 현재 편성 기준으로 저장됩니다.";
-  else if (saved() && rosterChange()) msg = "저장 후 편성이 변경되었습니다. [덮어쓰기]를 누르면 현재 편성 기준으로 저장됩니다.";
   else if (saved() && differsFromActual()) msg = "저장된 장비와 현재 장비가 다릅니다. [현재 장비로 저장]을 선택할 수 있습니다.";
   else if (saved()) msg = "저장된 프리셋과 현재 장비가 같습니다.";
-  const change = rosterChange();
-  const outs = outOfDeckHeroes();
-  const changeNote = change
-    ? `<div class="fmtNote"><div class="fmtText"><div>저장 후 편성 변경: 추가 ${change.added.length}명, 제외 ${change.removed.length}명</div>${outs.length ? "<div>제외된 영웅의 저장값은 덮어쓰면 삭제됩니다.</div>" : ""}</div>
-        ${outs.length ? `<div class="outHeroes">${outs.map((t) => `<img src="${heroImg(t)}" alt="${esc(heroName(t))}" title="${esc(heroName(t))}">`).join("")}</div>` : ""}</div>`
-    : "";
   const tabs = deck().tab
     ? `<div class="tabs">${groupDecks().map((g) => `<button class="tab ${g.index === S.deckIdx ? "on" : ""}" data-act="presetTab" data-d="${g.index}">${esc(g.tab)}${dirtyDeck(g.index) ? " *" : S.presets[g.index] ? " ✓" : ""}</button>`).join("")}</div>`
     : "";
@@ -807,15 +742,14 @@ function presetScreen() {
     <div class="pTop"><b>${esc(deck().group)} 장비 프리셋</b>${tabs}<span>참가 영웅 ${hs.length}/${deck().max}</span></div>
     <div class="pLeft">
       <div class="pHead"><div class="banner ${b.status ? "" : "none"}" ${b.status ? 'data-act="nextIssue"' : ""}><span>${b.text}</span>${b.status ? "<span>확인 ›</span>" : ""}</div></div>
-      ${changeNote}
       <div class="cards" data-keep="cards">${cards}</div>
       <button class="btn line loadAll ${allSame ? "dim" : ""}" data-act="loadAll">전체 불러오기</button>
     </div>
     <div class="pRight">
       <div class="pHero"><img src="${heroImg(h)}" alt=""><div class="t"><b>${esc(heroName(h))}</b><div>선택한 영웅의 장비</div></div>
         <button class="btn line" data-act="loadCurrent">현재 장비 불러오기</button></div>
-      <div class="slots">${slots}</div>
-      ${slotCompareHTML(h) || `<div class="pInfo">${slotInfoText(h)}</div>`}
+      ${compareHTML(h)}
+      <div class="pInfo">${compareInfo(h)}</div>
     </div>
     <div class="pFoot"><div class="msg">${msg}</div>
       ${differsFromActual()
@@ -834,7 +768,10 @@ function gearScreen() {
   }).join("");
   let rows;
   const s = V.gearSlot;
-  if (s === 7) {
+  if (s === 8) {
+    rows = Object.values(D.wisdoms).map((c) => `<div class="cand click" data-act="itemPop" data-s="8" data-v="${c.tid}"><img src="assets/item/${c.icon}.png" alt=""><div class="c"><b>${esc(c.name)}</b><span>여러 영웅 부여 가능</span></div>
+      ${a[8] === c.tid ? '<span class="tag ok">부여 중</span>' : `<button class="mini" data-act="equipWisdom" data-t="${c.tid}">부여</button>`}</div>`).join("");
+  } else if (s === 7) {
     rows = Object.values(D.crests).map((c) => `<div class="cand click" data-act="itemPop" data-s="7" data-v="${c.tid}"><img src="assets/item/${c.icon}.png" alt=""><div class="c"><b>${esc(c.name)}</b><span>등록된 문장 · 여러 영웅 착용 가능</span></div>
       ${a[7] === c.tid ? '<span class="tag ok">착용 중</span>' : `<button class="mini" data-act="equipCrest" data-t="${c.tid}">장착</button>`}</div>`).join("");
   } else {
@@ -871,7 +808,7 @@ function itemBody(s, v) {
   const label = (it.grade >= 7 && s < 7 ? "각성" : `★${it.grade}`);
   const owner = s < 7 && it.alive && it.owner
     ? `<img src="${heroImg(it.owner)}" alt=""><span>${esc(heroName(it.owner))} 장착 중</span>`
-    : `<span>${s === 7 ? "등록된 문장 · 여러 영웅이 함께 착용 가능" : it.alive ? "장착 중인 영웅 없음 (가방)" : "분해되어 사라진 장비입니다"}</span>`;
+    : `<span>${s === 8 ? "지식 · 여러 영웅에게 부여 가능" : s === 7 ? "등록된 문장 · 여러 영웅이 함께 착용 가능" : it.alive ? "장착 중인 영웅 없음 (가방)" : "분해되어 사라진 장비입니다"}</span>`;
   const meta = s < 7 && it.power ? `<div class="ipMeta"><b>장비 위력</b><i>${it.power}</i><em></em><b>티어</b><i>${it.tier}</i></div>` : "";
   const reroll = s < 7 && it.reroll ? `<div class="ipMeta bar"><b>남은 변환 횟수</b><i>${it.reroll}</i></div>` : "";
   const grow = s < 7 ? `<div class="ipGrow">돌파 ${it.lb} · 품질 ${it.q}${it.test ? " · 테스트 장비" : ""}</div>` : "";
@@ -903,7 +840,7 @@ function itemPopHTML() {
 }
 /* 프리셋 슬롯에 낄 수 있는 후보. 장비 교체 창과 같은 조건을 쓴다. */
 function swapCandidates(h, s) {
-  if (s === 7) return Object.values(D.crests).map((c) => ({ ...c, val: c.tid, owner: 0, power: 0 }));
+  if (s >= 7) return Object.values(s === 8 ? D.wisdoms : D.crests).map((c) => ({ ...c, val: c.tid, owner: 0, power: 0 }));
   return Object.values(S.items)
     .filter((i) => i.slot === s && (s === 1 ? i.htid === h : s === 2 ? i.type === HERO[h].weapon : true))
     .map((i) => ({ ...i, val: i.uid }));
@@ -911,39 +848,33 @@ function swapCandidates(h, s) {
 function swapHTML() {
   if (!V.swap) return "";
   const { h, s, pick, hideWorn, asc } = V.swap;
-  const cur = (V.draft[h] && V.draft[h][s]) || 0;
-  const teamUser = (val) => (s < 7 ? deckHeroes().find((o) => o !== h && V.draft[o] && V.draft[o][s] === val) : 0);
+  const cur = actualOf(h)[s] || 0;
+  const inPreset = (V.draft[h] && V.draft[h][s]) || 0;
   const dir = asc ? 1 : -1;
   const list = swapCandidates(h, s)
     .filter((c) => !hideWorn || !c.owner || c.val === cur || c.owner === h)
-    .sort((a, b) => (b.val === cur) - (a.val === cur) || dir * (a.grade - b.grade) || dir * ((a.power || 0) - (b.power || 0)));
-  const cells = list.map((c) => {
-    const user = teamUser(c.val);
-    return `<div class="swCell" data-act="swapPick" data-v="${c.val}">
+    .sort((a, b) => (b.val === cur) - (a.val === cur) || (b.val === inPreset) - (a.val === inPreset) || dir * (a.grade - b.grade) || dir * ((a.power || 0) - (b.power || 0)));
+  const cells = list.map((c) => `<div class="swCell" data-act="swapPick" data-v="${c.val}">
       <div class="swIcon g${c.grade} ${c.val === pick ? "picked" : ""}"><img src="assets/item/${c.icon}.png" alt="">${s < 7 ? `<span class="plus">+${c.lb}</span>` : ""}
         ${c.owner ? `<img class="swOwner" src="${heroImg(c.owner)}" alt="${esc(heroName(c.owner))}" title="${esc(heroName(c.owner))} 착용 중">` : ""}</div>
       <div class="swPow">${c.power ? `◈ ${c.power}` : `★${c.grade}`}</div>
-      ${c.val === cur ? '<span class="swTag cur">현재 프리셋</span>' : user ? `<span class="swTag mate">${esc(heroName(user))}</span>` : ""}</div>`;
-  }).join("");
+      ${c.val === cur ? '<span class="swTag cur">현재 착용</span>' : ""}${c.val === inPreset ? '<span class="swTag mate">프리셋</span>' : ""}</div>`).join("");
   const it = info(s, pick);
-  const user = pick ? teamUser(pick) : 0;
   const notes = [];
   if (it && it.alive && pick !== cur) {
-    if (user) notes.push(`${heroName(user)}의 ${SLOT_NAME[s]} 슬롯이 비워집니다.`);
-    if (s < 7 && it.owner && it.owner !== h) notes.push(isArena() ? `${heroName(it.owner)}의 실제 착용은 그대로입니다.` : `${heroName(it.owner)}의 실제 장비는 [장비 적용] 때 옮겨집니다.`);
+    notes.push("실제 장비가 바로 바뀝니다. 프리셋은 그대로이며 [현재 장비로 저장]으로 남길 수 있습니다.");
+    if (s < 7 && it.owner && it.owner !== h) notes.push(`${heroName(it.owner)}에게서 해제 후 장착합니다.`);
   }
-  const shared = it && it.alive ? otherTabsUsing(s, pick) : [];
-  if (shared.length) notes.push(`${shared.join(", ")}에도 저장된 장비입니다.`);
-  const btn = !pick ? "" : pick === cur
-    ? '<button class="btn green" data-act="swapClear">프리셋에서 해제</button>'
-    : '<button class="btn gold" data-act="swapDo">교체</button>';
+  const btn = !pick ? "" : pick !== cur
+    ? '<button class="btn gold" data-act="swapDo">교체</button>'
+    : s < 7 ? '<button class="btn green" data-act="swapClear">해제</button>' : "";
   return `<div class="ipDim" data-act="closeSwap"></div>
     <div class="sheet swInfo">
       <div class="ipScroll" data-keep="swapInfo">${it ? itemBody(s, pick) : `<div class="swEmpty">${esc(heroName(h))}의 ${SLOT_NAME[s]} 슬롯이 비어 있습니다.<br>오른쪽에서 장비를 고르세요.</div>`}</div>
       ${btn || notes.length ? `<div class="swFoot">${notes.map((t) => `<p>${esc(t)}</p>`).join("")}${btn}</div>` : ""}
     </div>
     <div class="sheet swList">
-      <div class="swHead">${esc(heroName(h))} · ${SLOT_NAME[s]} 프리셋 교체</div>
+      <div class="swHead">${esc(heroName(h))} · ${SLOT_NAME[s]} 교체</div>
       <div class="swGrid" data-keep="swapList">${cells || '<div class="swEmpty">고를 수 있는 장비가 없습니다.</div>'}</div>
       <div class="swBar"><label class="swHide" data-act="swapHide"><i class="${hideWorn ? "on" : ""}"></i>장착중인 장비 리스트에서 감추기</label>
         <button class="swSort" data-act="swapSort">희귀도 ${asc ? "▲" : "▼"}</button></div>
@@ -956,21 +887,19 @@ function modalHTML() {
   let body = "";
   if (m.type === "noPreset") {
     body = `<p>${MSG_NO_PRESET}</p><div class="row"><button class="btn line" data-act="no">아니오</button><button class="btn gold" data-act="yes">예</button></div>`;
+  } else if (m.type === "swapConfirm") {
+    const it = S.items[V.swap.pick];
+    body = `<p>${esc(heroName(it.owner))}이(가) 착용 중인 장비입니다.\n해제 후 장착하시겠습니까?</p><div class="row"><button class="btn line" data-act="closeModal">취소</button><button class="btn gold" data-act="swapConfirmYes">해제 후 장착</button></div>`;
   } else if (m.type === "saveCurrent") {
-    const outs = outOfDeckHeroes();
     body = `<p>현재 장비로 프리셋을 저장하시겠습니까?</p><ul>${m.lines.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>
-      ${outs.length ? `<div class="sub">편성에서 제외된 영웅 ${outs.length}명의 저장값이 삭제됩니다: ${outs.map((t) => esc(heroName(t))).join(", ")}</div>` : ""}
+      
       <div class="row"><button class="btn line" data-act="closeModal">취소</button><button class="btn gold" data-act="saveCurrentYes">저장</button></div>`;
   } else if (m.type === "overwrite") {
-    const outs = outOfDeckHeroes();
-    body = `<p>저장된 프리셋을 현재 화면 내용으로 덮어쓰시겠습니까?</p>${outs.length ? `<div class="sub">편성에서 제외된 영웅 ${outs.length}명의 저장값이 삭제됩니다.</div><ul>${outs.map((t) => `<li>${esc(heroName(t))}</li>`).join("")}</ul>` : ""}<div class="row"><button class="btn line" data-act="closeModal">취소</button><button class="btn gold" data-act="overwriteYes">덮어쓰기</button></div>`;
+    body = `<p>저장된 프리셋을 현재 화면 내용으로 덮어쓰시겠습니까?</p><div class="row"><button class="btn line" data-act="closeModal">취소</button><button class="btn gold" data-act="overwriteYes">덮어쓰기</button></div>`;
   } else if (m.type === "leave") {
     const tabs = dirtyTabs();
-    const outs = tabs.flatMap((d) => Object.keys(S.presets[d.index] || {}).map(Number).filter((h) => !S.decks[d.index].cells.includes(h)));
-    const names = [...new Set(outs)].map((t) => esc(heroName(t))).join(", ");
     body = `<p>변경 사항이 저장되지 않았습니다.\n정말로 나가시겠습니까?</p>
       ${tabs.length > 1 ? `<div class="sub">저장 안 한 탭: ${tabs.map((d) => esc(d.tab)).join(", ")}</div>` : ""}
-      ${names ? `<div class="sub">저장하면 편성에서 제외된 영웅의 저장값이 삭제됩니다: ${names}</div>` : ""}
       <div class="row"><button class="btn line" data-act="closeModal">취소</button><button class="btn line" data-act="leaveYes">나가기</button><button class="btn gold" data-act="saveLeave">저장 후 나가기</button></div>`;
   } else if (m.type === "alert") {
     body = `<p>${esc(m.text)}</p><div class="row"><button class="btn gold" data-act="closeModal">확인</button></div>`;
@@ -996,7 +925,7 @@ function modalHTML() {
   } else if (m.type === "apply") {
     const p = m.plan;
     const list = p.moves.map((x) => `<li>${esc(heroName(x.h))} ${SLOT_NAME[x.s]}: ${esc(x.name)}${x.from ? ` <b>(${esc(heroName(x.from))}에게서 해제)</b>` : ""}</li>`)
-      .concat(p.crests.map((x) => `<li>${esc(heroName(x.h))} 문장: ${esc(D.crests[x.tid].name)}</li>`))
+      .concat(p.crests.map((x) => `<li>${esc(heroName(x.h))} ${SLOT_NAME[x.s]}: ${esc(info(x.s, x.tid).name)}</li>`))
       .concat(p.missing.map((x) => `<li>${esc(heroName(x.h))} ${SLOT_NAME[x.s]}: ${esc(x.name)} 없음, 현재 장비 유지</li>`));
     body = `<p>저장된 장비로 실제 교체합니다.</p><ul>${list.join("")}</ul>
       <div class="row"><button class="btn line" data-act="closeModal">취소</button><button class="btn green" data-act="applyYes">적용</button></div>`;
@@ -1004,7 +933,8 @@ function modalHTML() {
   return `<div class="dimmer" style="z-index:30"></div><div class="sheet modal" style="z-index:31">${body}</div>`;
 }
 function sidePanel() {
-  const groups = D.decks.filter((d, i) => D.decks.findIndex((x) => x.group === d.group) === i);
+  // 결투장은 후속 작업이라 목록에서 뺀다.
+  const groups = D.decks.filter((d, i) => d.mode !== "arena" && D.decks.findIndex((x) => x.group === d.group) === i);
   const opts = groups.map((d) => {
     const members = D.decks.filter((x) => x.group === d.group);
     const n = members.filter((x) => S.presets[x.index]).length;
@@ -1092,6 +1022,7 @@ window.PRELOAD = [
   ...Object.values(HERO).map((h) => `assets/hero/${h.icon}.png`),
   ...D.items.map((i) => `assets/item/${i.icon}.png`),
   ...Object.values(D.crests).map((c) => `assets/item/${c.icon}.png`),
+  ...Object.values(D.wisdoms).map((c) => `assets/item/${c.icon}.png`),
 ].filter((u, i, a) => a.indexOf(u) === i).map((u) => { const m = new Image(); m.src = u; return m; });
 
 fresh();
