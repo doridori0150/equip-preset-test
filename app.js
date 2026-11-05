@@ -74,17 +74,33 @@ function heroStatus(h) {
   const d = V.draft[h];
   if (!d) return "unset";
   const a = actualOf(h);
-  let gone = false, diff = false;
+  let gone = false, diff = false, removed = false;
   SLOT_IDS.forEach((s) => {
     const v = d[s];
     if (!v) return;
     if (s < 7 && !S.items[v]) gone = true;
+    else if (!a[s]) removed = true;
     else if (v !== a[s]) diff = true;
   });
+  if (removed && !isArena()) return gone ? "gone" : "removed";
   // 결투장은 저장값으로 전투하므로 실제 착용과 달라도 문제가 아니다.
   return gone ? "gone" : diff && !isArena() ? "diff" : "ok";
 }
 const filled = (d) => SLOT_IDS.filter((s) => d[s] && (s >= 7 || S.items[d[s]])).length;
+/* 저장값과 비교해 영웅별로 빠진 칸(제거)과 바뀐 칸(변경)을 센다. */
+function gearChanges(h) {
+  const d = V.draft[h];
+  if (!d) return { removed: 0, changed: 0 };
+  const a = actualOf(h);
+  let removed = 0, changed = 0;
+  SLOT_IDS.forEach((s) => {
+    const v = d[s];
+    if (!v || (s < 7 && !S.items[v])) return;
+    if (!a[s]) removed++;
+    else if (v !== a[s]) changed++;
+  });
+  return { removed, changed };
+}
 function isDirty() {
   const sv = saved() || {};
   return deckHeroes().some((h) => !sameSlots(V.draft[h], sv[h]));
@@ -534,6 +550,7 @@ const ACT = {
 function doSwap() {
   const { h, s, pick } = V.swap;
   const name = info(s, pick).name;
+  let taken = 0;
   if (s === 7) S.crest[h] = pick;
   else if (s === 8) S.wisdom[h] = pick;
   else {
@@ -542,12 +559,15 @@ function doSwap() {
     const cur = actualOf(h)[s];
     if (cur) S.items[cur].owner = 0;
     it.owner = h;
-    if (from && from !== h) log(`${heroName(from)}에게서 해제: ${name}`);
+    if (from && from !== h) {
+      log(`${heroName(from)}에게서 해제: ${name}`);
+      if (deckHeroes().includes(from)) taken = from;
+    }
   }
   log(`실제 장비 교체: ${heroName(h)} ${SLOT_NAME[s]} ← ${name}`);
   ev("change");
   V.swap = null;
-  toast("실제 장비를 교체했습니다. 프리셋에 남기려면 [현재 장비로 저장]을 누르세요.");
+  toast(taken ? `${heroName(taken)}의 ${SLOT_NAME[s]}이(가) 제거되었습니다. 영웅 목록에서 확인하세요.` : "실제 장비를 교체했습니다. 프리셋에 남기려면 [현재 장비로 저장]을 누르세요.");
 }
 /* 전투 화면은 없으므로 어떤 장비로 시작했는지만 기록한다. */
 function startBattle(what) {
@@ -657,13 +677,15 @@ function teamScreen() {
 const STATUS_TAG = {
   unset: '<span class="tag unset">미설정</span>',
   gone: '<span class="tag gone">저장 장비 분해</span>',
-  diff: '<span class="tag diff">변경</span>',
+  diff: "",
+  removed: "",
   ok: "",
 };
 function bannerState() {
   const hs = deckHeroes();
   const c = (st) => hs.filter((h) => heroStatus(h) === st).length;
   if (c("unset")) return { status: "unset", text: `장비 미설정 영웅 ${c("unset")}명` };
+  if (c("removed")) return { status: "removed", text: `장비가 제거된 영웅 ${c("removed")}명` };
   if (c("gone")) return { status: "gone", text: `저장 장비가 분해된 영웅 ${c("gone")}명` };
   if (c("diff")) return { status: "diff", text: `현재 장비와 다른 영웅 ${c("diff")}명` };
   if (isDirty()) return { status: "", text: "저장 전 변경 사항이 있습니다" };
@@ -684,6 +706,7 @@ function compareState(h, s) {
   const mate = S.conflict[`${S.deckIdx}:${h}:${s}`];
   if (!v && mate) return { cls: "keep", tag: `${heroName(mate)} 사용`, count: true };
   if (it && !it.alive) return { cls: "gone", tag: "장비 없음", count: true };
+  if (v && !cur) return { cls: "gone", tag: "제거됨", count: true };
   if (v && v !== cur) return { cls: "diff", tag: "다름", count: true };
   if (!v && cur) return { cls: "keep", tag: "저장 안 함", count: true };
   return { cls: "", tag: "" };
@@ -714,10 +737,15 @@ function presetScreen() {
   const cards = hs.map((t, i) => {
     const st = heroStatus(t);
     const dr = V.draft[t];
-    return `<div class="card ${t === h ? "sel" : ""}" data-act="selectHero" data-h="${t}">
+    // 현재 착용 칸이 다 차지 않으면 카드 자체를 강조한다. 팀 내 교체로 장비가 빠진 경우를 바로 알 수 있게 한다.
+    const worn = filled(actualOf(t));
+    const low = worn < SLOT_IDS.length;
+    const ch = gearChanges(t);
+    const chTags = `${ch.removed ? `<span class="tag gone">제거 ${ch.removed}</span>` : ""}${ch.changed ? `<span class="tag diff">변경 ${ch.changed}</span>` : ""}`;
+    return `<div class="card ${t === h ? "sel" : ""} ${low ? "low" : ""}" data-act="selectHero" data-h="${t}">
       <img src="${heroImg(t)}" alt="">
       <div style="min-width:0"><div class="ct">${String(i + 1).padStart(2, "0")}</div><div class="nm">${esc(heroName(t))}</div>
-      <div class="ct">${dr ? `${filled(dr)}/8 ` : ""}${STATUS_TAG[st]}</div></div></div>`;
+      <div class="ct"><span class="cnt">${worn}/${SLOT_IDS.length}</span> ${STATUS_TAG[st]}${chTags}</div></div></div>`;
   }).join("");
   const allSame = hs.every((t) => sameSlots(V.draft[t], actualOf(t)));
   const dirty = isDirty();
