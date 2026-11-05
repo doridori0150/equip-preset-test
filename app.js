@@ -676,7 +676,7 @@ function teamScreen() {
 
 const STATUS_TAG = {
   unset: '<span class="tag unset">미설정</span>',
-  gone: '<span class="tag gone">저장 장비 분해</span>',
+  gone: '<span class="tag gone">분해</span>',
   diff: "",
   removed: "",
   ok: "",
@@ -735,7 +735,7 @@ function presetScreen() {
   const hs = deckHeroes();
   const b = bannerState();
   const h = V.selected;
-  const cards = hs.map((t, i) => {
+  const cards = hs.map((t) => {
     const st = heroStatus(t);
     const dr = V.draft[t];
     // 현재 착용 칸이 다 차지 않으면 카드 자체를 강조한다. 팀 내 교체로 장비가 빠진 경우를 바로 알 수 있게 한다.
@@ -743,10 +743,9 @@ function presetScreen() {
     const low = worn < SLOT_IDS.length;
     const ch = gearChanges(t);
     const chTags = `${ch.removed ? `<span class="tag gone">제거 ${ch.removed}</span>` : ""}${ch.changed ? `<span class="tag diff">변경 ${ch.changed}</span>` : ""}`;
-    return `<div class="card ${t === h ? "sel" : ""} ${low ? "low" : ""}" data-act="selectHero" data-h="${t}">
-      <img src="${heroImg(t)}" alt="">
-      <div style="min-width:0"><div class="ct">${String(i + 1).padStart(2, "0")}</div><div class="nm">${esc(heroName(t))}</div>
-      <div class="ct"><span class="cnt">${worn}/${SLOT_IDS.length}</span> ${STATUS_TAG[st]}${chTags}</div></div></div>`;
+    return `<div class="card ${t === h ? "sel" : ""} ${low ? "low" : ""}" data-act="selectHero" data-h="${t}" title="${esc(heroName(t))}">
+      <img src="${heroImg(t)}" alt="${esc(heroName(t))}">
+      <div class="cInfo"><span class="cnt">${worn}/${SLOT_IDS.length}</span>${STATUS_TAG[st]}${chTags}</div></div>`;
   }).join("");
   const allSame = hs.every((t) => sameSlots(V.draft[t], actualOf(t)));
   const dirty = isDirty();
@@ -766,17 +765,17 @@ function presetScreen() {
   const rightBtn = arena
     ? `<button class="btn line" data-act="copyTeam">${esc(other.tab)}으로 복사</button>`
     : `<button class="btn green ${canApply ? "" : "dim"}" data-act="apply">장비 적용</button>`;
-  return `<div class="dimmer"></div><div class="sheet preset ${deck().max > 9 ? "many" : ""}">
+  return `<div class="dimmer"></div><div class="sheet preset ${deck().max > 6 ? "many" : ""}">
     <button class="close" data-act="closePreset">✕</button>
     <div class="pTop"><b>${esc(deck().group)} 장비 프리셋</b>${tabs}<span>참가 영웅 ${hs.length}/${deck().max}</span></div>
     <div class="pLeft">
-      <div class="pHead"><div class="banner ${b.status ? "" : "none"}" ${b.status ? 'data-act="nextIssue"' : ""}><span>${b.text}</span>${b.status ? "<span>확인 ›</span>" : ""}</div></div>
       <div class="cards" data-keep="cards">${cards}</div>
-      <button class="btn line loadAll ${allSame ? "dim" : ""}" data-act="loadAll">전체 불러오기</button>
     </div>
     <div class="pRight">
+      <div class="pHead"><div class="banner ${b.status ? "" : "none"}" ${b.status ? 'data-act="nextIssue"' : ""}><span>${b.text}</span>${b.status ? "<span>확인 ›</span>" : ""}</div></div>
       <div class="pHero"><img src="${heroImg(h)}" alt=""><div class="t"><b>${esc(heroName(h))}</b><div>선택한 영웅의 장비</div></div>
-        <button class="btn line" data-act="loadCurrent">현재 장비 불러오기</button></div>
+        <button class="btn line" data-act="loadCurrent">현재 장비 불러오기</button>
+        <button class="btn line ${allSame ? "dim" : ""}" data-act="loadAll">전체 불러오기</button></div>
       ${compareHTML(h)}
       <div class="pInfo">${compareInfo(h)}</div>
     </div>

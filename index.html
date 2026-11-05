@@ -64,42 +64,37 @@ button { font: inherit; cursor: pointer; }
 .close { position: absolute; right: 12px; top: 10px; width: 34px; height: 34px; border-radius: 50%; border: 1px solid #a8987b; background: #fff8e9; font-weight: 700; color: var(--ink); z-index: 2; }
 
 /* 장비 프리셋 */
-.preset { left: 40px; top: 28px; width: 1200px; height: 664px; display: grid; grid-template-columns: 560px 1fr; grid-template-rows: auto minmax(0, 1fr) 84px; }
+.preset { left: 0; top: 0; width: 1280px; height: 720px; border: 0; border-radius: 0; display: grid; grid-template-columns: 148px 1fr; grid-template-rows: auto minmax(0, 1fr) 84px; }
 .pTop { grid-column: 1 / 3; display: flex; align-items: center; gap: 14px; min-height: 46px; padding: 6px 60px 6px 16px; border-bottom: 1px solid var(--line); }
 .pTop b { min-width: 0; font-size: 19px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pTop > span { flex: none; margin-left: auto; font-size: 13.5px; font-weight: 700; color: var(--ink-soft); }
 .tabs { flex: none; display: flex; flex-wrap: wrap; gap: 4px; }
 .tab { padding: 4px 11px; border: 1px solid #8a7c63; border-radius: 6px; background: #efe7d6; color: var(--ink); font-size: 13px; }
 .tab.on { background: var(--gold); border-color: var(--gold-deep); font-weight: 700; }
-.pLeft { border-right: 1px solid var(--line); padding: 16px; min-height: 0; display: flex; flex-direction: column; }
+.preset.many { grid-template-columns: 256px 1fr; }
+.pLeft { border-right: 1px solid var(--line); padding: 10px; min-height: 0; display: flex; flex-direction: column; }
 .pHead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; }
 .fmtNote { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; padding: 5px 10px; background: var(--paper-2); border: 1px solid var(--line); border-radius: 6px; font-size: 12.5px; line-height: 1.4; color: #4a3e2e; }
 .fmtText { min-width: 0; }
 .outHeroes { flex: none; display: flex; gap: 4px; max-width: 200px; overflow: hidden; }
 .outHeroes img { width: 30px; height: 30px; border-radius: 50%; filter: grayscale(.9); opacity: .65; }
-.many .cards { grid-auto-rows: 84px; }
-.many .card { padding: 5px 8px; }
-.many .card img { width: 54px; height: 54px; }
-.many .card .ct { margin-top: 1px; font-size: 12px; }
-.many .card .nm { font-size: 13px; }
 .banner { flex: 1; min-width: 0; display: flex; justify-content: space-between; gap: 8px; padding: 7px 12px; background: #f7dfa3; border: 1px solid #c79a3a; border-radius: 8px; font-size: 13.5px; color: #6c4a10; cursor: pointer; }
 .banner.none { background: #dfeccb; border-color: #8cae5b; color: #3e5f1a; cursor: default; }
-.cards { display: grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: 104px; gap: 8px; overflow-y: auto; }
-.loadAll { flex: none; margin-top: auto; padding: 8px; font-size: 14px; }
-.card { position: relative; display: flex; align-items: center; gap: 6px; padding: 8px; background: #fbf7ee; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; min-width: 0; }
+.cards { display: grid; grid-template-columns: minmax(0, 1fr); grid-auto-rows: 88px; gap: 6px; overflow-y: auto; }
+.many .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.card { position: relative; display: flex; align-items: center; gap: 4px; padding: 6px; background: #fbf7ee; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; min-width: 0; }
 .card.sel { border: 2px solid var(--gold); background: #fff4d2; }
-.card img { width: 66px; height: 66px; border-radius: 50%; flex: none; }
-.card .nm { font-size: 13.5px; font-weight: 700; line-height: 1.25; word-break: keep-all; }
-.card .ct { margin-top: 3px; font-size: 13px; color: var(--ink-soft); }
+.card img { width: 56px; height: 56px; border-radius: 50%; flex: none; }
+.cInfo { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-size: 13px; color: var(--ink-soft); }
 .tag { display: inline-block; padding: 1px 8px; border-radius: 9px; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
 .tag.unset { background: #f3dcab; color: #80570f; }
 .tag.gone { background: #f4c7bd; color: #8e2a15; }
 .tag.diff { background: #c9dff4; color: #1d4e80; }
 .tag.keep { background: #e5ddcb; color: #5d5140; }
 .tag.ok { background: #d9e9c5; color: #3d5f18; }
-.pRight { padding: 16px 12px; min-height: 0; position: relative; }
-.pHero { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); padding: 0 40px 10px 0; }
-.pHero img { width: 66px; height: 66px; border-radius: 50%; }
+.pRight { padding: 12px 16px; min-height: 0; position: relative; }
+.pHero { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); padding: 0 0 8px; }
+.pHero img { width: 52px; height: 52px; border-radius: 50%; }
 .pHero .t { flex: 1; min-width: 0; }
 .pHero .t b { font-size: 21px; }
 .pHero .t div { font-size: 13px; color: var(--ink-soft); }
@@ -116,7 +111,7 @@ button { font: inherit; cursor: pointer; }
 .slot .plus { position: absolute; right: -4px; top: -2px; padding: 0 6px; font-size: 12px; font-weight: 700; background: #2c241b; color: #ffe4a6; border-radius: 9px; }
 .slotBox .lb { font-size: 12px; margin-top: 3px; color: var(--ink-soft); }
 .slotBox .tag { margin-top: 2px; }
-.pInfo { position: absolute; left: 24px; right: 24px; bottom: 10px; min-height: 42px; padding: 7px 10px; font-size: 12.5px; line-height: 1.5; background: var(--paper-2); border: 1px solid var(--line); border-radius: 6px; color: #4a3e2e; }
+.pInfo { position: absolute; left: 16px; right: 16px; bottom: 10px; min-height: 42px; padding: 7px 10px; font-size: 12.5px; line-height: 1.5; background: var(--paper-2); border: 1px solid var(--line); border-radius: 6px; color: #4a3e2e; }
 .pInfo.cmp { padding: 8px 10px; }
 .click { cursor: pointer; }
 .swInfo, .swList { z-index: 21; top: 16px; height: 688px; display: flex; flex-direction: column; background: #1a1613; color: #e9e0cc; border-color: #6d5c40; overflow: hidden; }
@@ -211,21 +206,21 @@ button { font: inherit; cursor: pointer; }
 .pbRow .ok { color: #2f8a45; } .pbRow .bad { color: #c02a1c; } .pbRow .none { color: var(--ink-soft); }
 .card.low { background: #fbe4dd; border-color: #d9775f; }
 .card.low.sel { background: #fbdcc6; border-color: var(--gold); }
-.card .cnt { font-weight: 700; }
+.card .cnt { font-weight: 700; font-size: 14px; }
+.cInfo .tag { padding: 0 5px; font-size: 11px; }
 .card.low .cnt { color: #c02a1c; font-weight: 800; font-size: 15px; }
-.card .ct .tag { margin-right: 2px; padding: 0 5px; font-size: 11px; }
-.pGrid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-auto-rows: 240px; gap: 4px; margin-top: 12px; }
+.pGrid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-auto-rows: 350px; gap: 4px; margin-top: 10px; }
 .pSlot { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0 4px; border: 2px solid transparent; border-radius: 10px; cursor: pointer; min-width: 0; }
 .pSlot.diff { background: #fbe7b3; } .pSlot.gone { background: #f7d5cb; } .pSlot.keep { background: #e9e1d0; }
 .pSlot.picked { border-color: var(--gold-deep); }
-.pName { font-size: 13.5px; font-weight: 700; color: var(--ink-soft); white-space: nowrap; }
-.pGrid .slot { flex: none; width: 66px; height: 66px; }
-.pGrid .slot img { width: 56px; height: 56px; }
-.pGrid .slot .plus { right: -5px; top: -3px; padding: 0 5px; font-size: 12px; }
-.pGrid .slot.empty span { font-size: 12px; text-align: center; }
+.pName { font-size: 15px; font-weight: 700; color: var(--ink-soft); white-space: nowrap; }
+.pGrid .slot { flex: none; width: 112px; height: 112px; }
+.pGrid .slot img { width: 96px; height: 96px; }
+.pGrid .slot .plus { right: -3px; top: -2px; padding: 0 6px; font-size: 14px; }
+.pGrid .slot.empty span { font-size: 14px; text-align: center; }
 .pUnder { display: flex; flex-direction: column; align-items: center; gap: 3px; margin-top: 8px; width: 100%; }
-.pUnder small { font-size: 12px; font-weight: 700; color: #5d5140; }
-.pTag { padding: 0 2px; font-size: 13px; line-height: 1.25; font-weight: 700; text-align: center; word-break: keep-all; color: #7a4a10; }
+.pUnder small { font-size: 13px; font-weight: 700; color: #5d5140; }
+.pTag { padding: 0 2px; font-size: 14px; line-height: 1.25; font-weight: 700; text-align: center; word-break: keep-all; color: #7a4a10; }
 .pSlot.gone .pTag { color: #8e2a15; } .pSlot.keep .pTag { color: #5d5140; }
 .pbDetail { padding: 2px 18px 0; font-size: 13.5px; line-height: 1.6; color: #4a3e2e; }
 .modal .sub { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
