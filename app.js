@@ -106,6 +106,25 @@ function dirtyDeck(idx) {
 }
 const anyDirty = () => groupDecks().some((d) => dirtyDeck(d.index));
 const dirtyTabs = () => groupDecks().filter((d) => dirtyDeck(d.index));
+/* 화면은 저장값 그대로인데 실제 착용이나 편성만 달라진 상태. 이때 왼쪽 버튼은 [현재 장비로 저장]이 된다. */
+function differsFromActual() {
+  const sv = saved();
+  if (!sv || isDirty()) return false;
+  return deckHeroes().some((h) => !sameSlots(sv[h], actualOf(h)));
+}
+function saveCurrentLines() {
+  const sv = saved();
+  const out = [];
+  const nameOf = (s, v) => { const it = info(s, v); return it ? it.name : "없음"; };
+  deckHeroes().forEach((h) => {
+    if (!sv[h]) { out.push(`${heroName(h)}: 새로 저장`); return; }
+    const a = actualOf(h);
+    SLOT_IDS.forEach((s) => {
+      if ((sv[h][s] || 0) !== (a[s] || 0)) out.push(`${heroName(h)} ${SLOT_NAME[s]}: ${nameOf(s, sv[h][s])} → ${nameOf(s, a[s])}`);
+    });
+  });
+  return out;
+}
 const canSave = () => Object.keys(V.draft).length > 0 && (isDirty() || hasOutOfDeck());
 /* 저장 후 팀 프리셋의 편성이 달라졌는지. 편성은 팀 프리셋이 맡고, 저장 때의 명단은 비교에만 쓴다. */
 function rosterChange() {
@@ -479,6 +498,14 @@ const ACT = {
     doSave();
   },
   overwriteYes() { V.modal = null; doSave(); },
+  saveCurrent() { V.modal = { type: "saveCurrent", lines: saveCurrentLines() }; },
+  saveCurrentYes() {
+    V.modal = null;
+    deckHeroes().forEach((h) => { V.draft[h] = actualOf(h); });
+    ev("load");
+    log("현재 장비로 저장: 편성 영웅 전원");
+    doSave();
+  },
   apply() {
     if (!saved()) { log("장비 적용: 저장된 프리셋 없음, 반응 없음"); return; }
     if (isDirty()) { V.modal = { type: "alert", text: "저장하지 않은 변경 사항이 있습니다.\n저장한 뒤 적용해 주세요." }; return; }
@@ -733,8 +760,10 @@ function presetScreen() {
   let msg = arena ? "프리셋을 저장하면 이 장비로 전투합니다. 실제 착용은 바뀌지 않습니다." : "프리셋을 저장하면 이 편성의 장비 상태를 다시 적용할 수 있습니다.";
   if (dirty) msg = "저장하지 않은 변경 사항이 있습니다.";
   else if (arena && saved() && !rosterChange()) msg = "저장된 장비로 전투합니다. 실제 착용은 바뀌지 않습니다.";
-  else if (saved() && canApply) msg = "저장된 장비와 현재 장비가 다릅니다. [장비 적용] 또는 [현재 장비 불러오기] 후 저장을 선택할 수 있습니다.";
-  else if (saved() && rosterChange()) msg = "저장 후 편성이 변경되었습니다. [전체 불러오기] 후 덮어쓰면 현재 편성 기준으로 저장됩니다.";
+  else if (saved() && canApply) msg = "저장된 장비와 현재 장비가 다릅니다. [현재 장비로 저장] 또는 [장비 적용]을 선택할 수 있습니다.";
+  else if (saved() && rosterChange() && differsFromActual()) msg = "저장 후 편성이 변경되었습니다. [현재 장비로 저장]을 누르면 현재 편성 기준으로 저장됩니다.";
+  else if (saved() && rosterChange()) msg = "저장 후 편성이 변경되었습니다. [덮어쓰기]를 누르면 현재 편성 기준으로 저장됩니다.";
+  else if (saved() && differsFromActual()) msg = "저장된 장비와 현재 장비가 다릅니다. [현재 장비로 저장]을 선택할 수 있습니다.";
   else if (saved()) msg = "저장된 프리셋과 현재 장비가 같습니다.";
   const change = rosterChange();
   const outs = outOfDeckHeroes();
@@ -765,7 +794,9 @@ function presetScreen() {
       ${slotCompareHTML(h) || `<div class="pInfo">${slotInfoText(h)}</div>`}
     </div>
     <div class="pFoot"><div class="msg">${msg}</div>
-      <button class="btn gold ${canSave() ? "" : "dim"}" data-act="save">${saved() ? "덮어쓰기" : "저장"}</button>
+      ${differsFromActual()
+    ? '<button class="btn gold" data-act="saveCurrent">현재 장비로 저장</button>'
+    : `<button class="btn gold ${canSave() ? "" : "dim"}" data-act="save">${saved() ? "덮어쓰기" : "저장"}</button>`}
       ${rightBtn}</div>
   </div>`;
 }
@@ -849,6 +880,11 @@ function modalHTML() {
   let body = "";
   if (m.type === "noPreset") {
     body = `<p>${MSG_NO_PRESET}</p><div class="row"><button class="btn line" data-act="no">아니오</button><button class="btn gold" data-act="yes">예</button></div>`;
+  } else if (m.type === "saveCurrent") {
+    const outs = outOfDeckHeroes();
+    body = `<p>현재 장비로 프리셋을 저장하시겠습니까?</p><ul>${m.lines.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>
+      ${outs.length ? `<div class="sub">편성에서 제외된 영웅 ${outs.length}명의 저장값이 삭제됩니다: ${outs.map((t) => esc(heroName(t))).join(", ")}</div>` : ""}
+      <div class="row"><button class="btn line" data-act="closeModal">취소</button><button class="btn gold" data-act="saveCurrentYes">저장</button></div>`;
   } else if (m.type === "overwrite") {
     const outs = outOfDeckHeroes();
     body = `<p>저장된 프리셋을 현재 화면 내용으로 덮어쓰시겠습니까?</p>${outs.length ? `<div class="sub">편성에서 제외된 영웅 ${outs.length}명의 저장값이 삭제됩니다.</div><ul>${outs.map((t) => `<li>${esc(heroName(t))}</li>`).join("")}</ul>` : ""}<div class="row"><button class="btn line" data-act="closeModal">취소</button><button class="btn gold" data-act="overwriteYes">덮어쓰기</button></div>`;
