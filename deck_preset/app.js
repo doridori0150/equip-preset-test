@@ -267,7 +267,7 @@ const STEPS = [
   ["st", "추가. 저장값과 장비가 다른 팀으로 [전투 시작] → 안내 팝업"],
 ];
 const FORM_STEPS = [
-  ["f1", "편성. 프리셋 저장 후 편성을 바꾸고 다시 열기 (배너, 프리셋에 없음 태그)"],
+  ["f1", "편성. 프리셋 저장 후 편성을 바꾸고 다시 열기 (배너, 추가됨 태그)"],
   ["f2", "편성. [프리셋 불러오기]로 편성과 장비를 함께 되돌리기"],
 ];
 const LOCK_STEPS = [
@@ -793,7 +793,7 @@ function teamScreen() {
 }
 
 const STATUS_TAG = {
-  notin: '<span class="tag keep">프리셋에 없음</span>',
+  notin: '<span class="tag keep">추가됨</span>',
   unset: '<span class="tag unset">미설정</span>',
   gone: '<span class="tag gone">분해</span>',
   diff: "",
@@ -912,7 +912,7 @@ function presetScreen() {
   const plan = buildPlan();
   const canApply = saved() && !dirty && (!plan.form.same || plan.moves.length || plan.crests.length || plan.missing.length);
   const arena = isArena();
-  let msg = arena ? "프리셋을 저장하면 이 장비로 전투합니다. 실제 착용은 바뀌지 않습니다." : "프리셋을 저장하면 이 편성의 편성과 장비를 언제든 다시 불러올 수 있습니다.";
+  let msg = arena ? "프리셋을 저장하면 이 장비로 전투합니다. 실제 착용은 바뀌지 않습니다." : "프리셋을 저장하면 지금 편성과 장비를 언제든 다시 불러올 수 있습니다.";
   if (dirty) msg = "저장하지 않은 변경 사항이 있습니다.";
   else if (arena && saved()) msg = "저장된 장비로 전투합니다. 실제 착용은 바뀌지 않습니다.";
   else if (saved() && canApply) msg = `저장된 프리셋과 현재 ${plan.form.same ? "장비" : "편성·장비"}가 다릅니다. [현재 상태로 저장] 또는 [프리셋 불러오기]를 선택할 수 있습니다.`;
