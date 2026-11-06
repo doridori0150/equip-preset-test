@@ -189,7 +189,7 @@ function dirtyDeck(idx) {
 }
 const anyDirty = () => groupDecks().some((d) => dirtyDeck(d.index));
 const dirtyTabs = () => groupDecks().filter((d) => dirtyDeck(d.index));
-/* 화면은 저장값 그대로인데 실제 착용이나 편성만 달라진 상태. 이때 왼쪽 버튼은 [현재 장비로 저장]이 된다. */
+/* 화면은 저장값 그대로인데 실제 착용이나 편성만 달라진 상태. 이때 왼쪽 버튼은 [현재 상태로 저장]이 된다. */
 function differsFromActual() {
   const sv = saved();
   if (!sv || isDirty()) return false;
@@ -521,7 +521,7 @@ const ACT = {
   },
   leaveYes() { V.modal = null; V.drafts = {}; V.screen = "team"; log("저장하지 않고 나가기: 화면 값 버림"); },
   selectHero(el) { V.selected = Number(el.dataset.h); V.inspect = V.selected; V.slot = 0; },
-  // 슬롯을 누르면 교체 팝업. [교체]는 실제 장비를 바꾼다. 프리셋은 [현재 장비로 저장]으로 따로 남긴다.
+  // 슬롯을 누르면 교체 팝업. [교체]는 실제 장비를 바꾼다. 프리셋은 [현재 상태로 저장]으로 따로 남긴다.
   pickSlot(el) {
     const s = Number(el.dataset.s);
     const h = V.selected;
@@ -677,7 +677,7 @@ function doSwap() {
   log(`실제 장비 교체: ${heroName(h)} ${SLOT_NAME[s]} ← ${name}`);
   ev("change");
   V.swap = null;
-  toast(taken ? `${heroName(taken)}의 ${SLOT_NAME[s]}이(가) 제거되었습니다. 영웅 목록에서 확인하세요.` : "실제 장비를 교체했습니다. 프리셋에 남기려면 [현재 장비로 저장]을 누르세요.");
+  toast(taken ? `${heroName(taken)}의 ${SLOT_NAME[s]}이(가) 제거되었습니다. 영웅 목록에서 확인하세요.` : "실제 장비를 교체했습니다. 프리셋에 남기려면 [현재 상태로 저장]을 누르세요.");
 }
 /* 전투 화면은 없으므로 어떤 장비로 시작했는지만 기록한다. */
 function startBattle(what) {
@@ -1050,7 +1050,7 @@ function swapHTML() {
   const it = info(s, pick);
   const notes = [];
   if (it && it.alive && pick !== cur) {
-    notes.push("실제 장비가 바로 바뀝니다. 프리셋은 그대로이며 [현재 장비로 저장]으로 남길 수 있습니다.");
+    notes.push("실제 장비가 바로 바뀝니다. 프리셋은 그대로이며 [현재 상태로 저장]으로 남길 수 있습니다.");
     if (s < 7 && it.owner && it.owner !== h) notes.push(`${heroName(it.owner)}에게서 해제 후 장착합니다.`);
   }
   const btn = !pick ? "" : pick !== cur
